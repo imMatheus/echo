@@ -1,25 +1,11 @@
 import type { Organization, OrganizationWithRole, OrgMember, OrgRole, OrgScopeType, ScopeMember } from '@echo/shared';
+import { slugify } from '@echo/shared';
 import { badRequest, conflict, forbidden, notFound } from '@/lib/http-error';
 import type { AppContext, AuthContext } from '@/types';
 import { logAudit } from './audit';
 
 function mapOrg(row: any): Organization {
   return { id: row.id, name: row.name, slug: row.slug, createdAt: row.created_at.toISOString() };
-}
-
-export function slugify(name: string): string {
-  const stripped = [...name.toLowerCase().normalize('NFKD')]
-    .filter((ch) => {
-      const cp = ch.codePointAt(0) ?? 0;
-      return cp < 0x300 || cp > 0x36f; // drop combining diacritics left by NFKD
-    })
-    .join('');
-  return (
-    stripped
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .slice(0, 48) || 'org'
-  );
 }
 
 /** The caller's role in the org, or null if not a member. */

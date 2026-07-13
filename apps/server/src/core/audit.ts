@@ -62,36 +62,36 @@ const BASE_SELECT = `
   LEFT JOIN users u ON u.id = a.actor_user_id
   LEFT JOIN api_keys k ON k.id = a.api_key_id`;
 
-/** Events where the given user is the actor. */
-export async function listUserAudit(app: AppContext, userId: string, q: AuditQuery): Promise<AuditListResponse> {
-  const params: unknown[] = [userId];
-  let where = 'WHERE a.actor_user_id = $1';
+async function listAudit(
+  app: AppContext,
+  filterColumn: 'a.actor_user_id' | 'a.org_id',
+  filterValue: string,
+  q: AuditQuery,
+): Promise<AuditListResponse> {
+  const params: unknown[] = [filterValue];
+  let where = `WHERE ${filterColumn} = $1`;
   if (q.action) {
     params.push(`%${q.action}%`);
     where += ` AND a.action ILIKE $${params.length}`;
   }
-  const total = await app.db.query(`SELECT count(*)::int AS n FROM audit_logs a ${where}`, params);
+  const countParams = [...params];
   params.push(q.limit, q.offset);
-  const { rows } = await app.db.query(
-    `${BASE_SELECT} ${where} ORDER BY a.occurred_at DESC, a.id DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
-    params,
-  );
+  const [total, { rows }] = await Promise.all([
+    app.db.query(`SELECT count(*)::int AS n FROM audit_logs a ${where}`, countParams),
+    app.db.query(
+      `${BASE_SELECT} ${where} ORDER BY a.occurred_at DESC, a.id DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
+      params,
+    ),
+  ]);
   return { entries: rows.map(mapEntry), total: total.rows[0].n };
 }
 
+/** Events where the given user is the actor. */
+export function listUserAudit(app: AppContext, userId: string, q: AuditQuery): Promise<AuditListResponse> {
+  return listAudit(app, 'a.actor_user_id', userId, q);
+}
+
 /** Org-scoped events only — personal memories never carry an org_id, so they never show here. */
-export async function listOrgAudit(app: AppContext, orgId: string, q: AuditQuery): Promise<AuditListResponse> {
-  const params: unknown[] = [orgId];
-  let where = 'WHERE a.org_id = $1';
-  if (q.action) {
-    params.push(`%${q.action}%`);
-    where += ` AND a.action ILIKE $${params.length}`;
-  }
-  const total = await app.db.query(`SELECT count(*)::int AS n FROM audit_logs a ${where}`, params);
-  params.push(q.limit, q.offset);
-  const { rows } = await app.db.query(
-    `${BASE_SELECT} ${where} ORDER BY a.occurred_at DESC, a.id DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
-    params,
-  );
-  return { entries: rows.map(mapEntry), total: total.rows[0].n };
+export function listOrgAudit(app: AppContext, orgId: string, q: AuditQuery): Promise<AuditListResponse> {
+  return listAudit(app, 'a.org_id', orgId, q);
 }

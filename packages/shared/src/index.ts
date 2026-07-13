@@ -1,7 +1,8 @@
 /**
- * Shared types for Echo — the open context layer for AI apps.
+ * Shared types (and small cross-package utilities) for Echo — the open
+ * context layer for AI apps.
  *
- * These types describe the REST API surface exactly as the server returns it
+ * The types describe the REST API surface exactly as the server returns it
  * (camelCase JSON). The dashboard, the MCP stdio bridge, and any third-party
  * client can rely on them.
  */
@@ -273,4 +274,24 @@ export interface ApiError {
       | 'internal_error';
     message: string;
   };
+}
+
+// ---------------------------------------------------------------------------
+// Utilities
+// ---------------------------------------------------------------------------
+
+/** URL-friendly org slug: lowercased, diacritics stripped, non-alphanumerics dashed. */
+export function slugify(name: string): string {
+  const stripped = [...name.toLowerCase().normalize('NFKD')]
+    .filter((ch) => {
+      const cp = ch.codePointAt(0) ?? 0;
+      return cp < 0x300 || cp > 0x36f; // drop combining diacritics left by NFKD
+    })
+    .join('');
+  return (
+    stripped
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 48) || 'org'
+  );
 }

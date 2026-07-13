@@ -42,13 +42,17 @@ export async function signup(
   }
 }
 
+// Precomputed once so unknown-email logins cost exactly one scrypt verify,
+// matching the known-email path (uniform timing, no wasted hashing per attempt).
+const DUMMY_HASH = hashPassword('invalid-password-placeholder');
+
 export async function login(app: AppContext, email: string, password: string): Promise<User> {
   const { rows } = await app.db.query('SELECT * FROM users WHERE email = $1', [email]);
   const row = rows[0];
   // Verify against a dummy hash on unknown emails to keep timing uniform.
   const ok = row
     ? await verifyPassword(password, row.password_hash)
-    : await verifyPassword(password, await hashPassword('invalid-password-placeholder')).then(() => false);
+    : await verifyPassword(password, await DUMMY_HASH).then(() => false);
   if (!row || !ok) throw unauthorized('Invalid email or password');
   await logAudit(app, { action: 'auth.login', actorUserId: row.id });
   return mapUser(row);

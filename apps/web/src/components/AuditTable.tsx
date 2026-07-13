@@ -20,6 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { useDebouncedValue } from '@/lib/use-debounced';
 import { cn } from '@/lib/utils';
 
 const PAGE_SIZE = 50;
@@ -52,28 +53,28 @@ export function AuditTable({
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
 
+  // Only the typed action filter is debounced; pagination fetches immediately.
+  const debouncedAction = useDebouncedValue(action);
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    const timer = window.setTimeout(() => {
-      fetchPage({ limit: PAGE_SIZE, offset, action: action.trim() || undefined })
-        .then((res) => {
-          if (cancelled) return;
-          setEntries(res.entries);
-          setTotal(res.total);
-        })
-        .catch((err) => {
-          if (!cancelled) toast.error(errorMessage(err));
-        })
-        .finally(() => {
-          if (!cancelled) setLoading(false);
-        });
-    }, 250);
+    fetchPage({ limit: PAGE_SIZE, offset, action: debouncedAction.trim() || undefined })
+      .then((res) => {
+        if (cancelled) return;
+        setEntries(res.entries);
+        setTotal(res.total);
+      })
+      .catch((err) => {
+        if (!cancelled) toast.error(errorMessage(err));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
     return () => {
       cancelled = true;
-      window.clearTimeout(timer);
     };
-  }, [fetchPage, offset, action]);
+  }, [fetchPage, offset, debouncedAction]);
 
   if (entries === null && loading) return <PageLoading />;
 

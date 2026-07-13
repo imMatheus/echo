@@ -32,10 +32,11 @@ export function Layout() {
 
   return (
     <div className="flex min-h-screen">
-      <aside className="fixed inset-y-0 left-0 z-10 flex w-60 flex-col border-r border-sidebar-border bg-sidebar p-3 pt-4 text-sidebar-foreground">
-        <div className="flex items-center gap-2.5 px-2.5 pb-4">
+      {/* Collapses to an icon rail below md; labels stay for screen readers. */}
+      <aside className="fixed inset-y-0 left-0 z-10 flex w-60 flex-col border-r border-sidebar-border bg-sidebar p-3 pt-4 text-sidebar-foreground max-md:w-14 max-md:p-2 max-md:pt-4">
+        <div className="flex items-center gap-2.5 px-2.5 pb-4 max-md:justify-center max-md:px-0">
           <LogoMark />
-          <span className="font-heading text-[17px] font-bold tracking-tight">Echo</span>
+          <span className="font-heading text-[17px] font-bold tracking-tight max-md:sr-only">Echo</span>
         </div>
         <nav className="flex flex-col gap-0.5">
           {NAV_ITEMS.map((item) => (
@@ -43,9 +44,10 @@ export function Layout() {
               key={item.to}
               to={item.to}
               end={item.end}
+              title={item.label}
               className={({ isActive }) =>
                 cn(
-                  'flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-xs/relaxed font-medium transition-colors [&_svg]:size-3.5 [&_svg]:shrink-0',
+                  'flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-xs/relaxed font-medium transition-colors max-md:justify-center max-md:px-0 max-md:py-2 [&_svg]:size-3.5 [&_svg]:shrink-0',
                   isActive
                     ? 'bg-sidebar-accent text-sidebar-accent-foreground [&_svg]:text-sidebar-primary'
                     : 'text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground',
@@ -53,16 +55,19 @@ export function Layout() {
               }
             >
               {item.icon}
-              {item.label}
+              <span className="max-md:sr-only">{item.label}</span>
             </NavLink>
           ))}
         </nav>
-        <div className="mt-auto flex items-center gap-2 border-t border-sidebar-border pt-2.5">
-          <div className="flex min-w-0 flex-1 items-center gap-2.5 rounded-md px-2 py-1.5">
-            <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-sidebar-primary/15 text-[11px] font-bold text-scope-personal">
+        <div className="mt-auto flex items-center gap-2 border-t border-sidebar-border pt-2.5 max-md:flex-col max-md:gap-1.5">
+          <div className="flex min-w-0 flex-1 items-center gap-2.5 rounded-md px-2 py-1.5 max-md:flex-none max-md:px-0">
+            <span
+              className="flex size-7 shrink-0 items-center justify-center rounded-full bg-sidebar-primary/15 text-[11px] font-bold text-scope-personal"
+              title={user ? `${user.name} (${user.email})` : undefined}
+            >
               {user ? initials(user.name) : '?'}
             </span>
-            <div className="min-w-0">
+            <div className="min-w-0 max-md:sr-only">
               <div className="truncate text-xs font-semibold">{user?.name}</div>
               <div className="truncate text-[11px] text-muted-foreground">{user?.email}</div>
             </div>
@@ -72,7 +77,7 @@ export function Layout() {
           </Button>
         </div>
       </aside>
-      <main className="ml-60 min-w-0 flex-1 px-10 pb-16 pt-8 max-md:px-5">
+      <main className="ml-60 min-w-0 flex-1 px-10 pb-16 pt-8 max-md:ml-14 max-md:px-5">
         <div className="mx-auto max-w-[960px]">
           <Outlet />
         </div>

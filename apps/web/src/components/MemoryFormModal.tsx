@@ -7,6 +7,7 @@ import type {
   ScopeWithAccess,
   Sensitivity,
 } from '@echo/shared';
+import { MEMORY_KINDS, SENSITIVITIES } from '@echo/shared';
 import * as api from '../api';
 import { errorMessage } from '../api';
 import { ScopeSelectItems, scopeSelectItems } from './ScopeOptions';
@@ -31,16 +32,8 @@ import {
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
 
-const KIND_ITEMS = [
-  { value: 'explicit', label: 'explicit' },
-  { value: 'inferred', label: 'inferred' },
-];
-
-const SENSITIVITY_ITEMS = [
-  { value: 'low', label: 'low' },
-  { value: 'normal', label: 'normal' },
-  { value: 'high', label: 'high' },
-];
+const KIND_ITEMS = MEMORY_KINDS.map((k) => ({ value: k, label: k }));
+const SENSITIVITY_ITEMS = SENSITIVITIES.map((s) => ({ value: s, label: s }));
 
 export function MemoryFormModal({
   scopes,

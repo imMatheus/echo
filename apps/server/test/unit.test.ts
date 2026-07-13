@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { slugify } from '@echo/shared';
 import { generateApiKey, hashPassword, sha256Hex, verifyPassword } from '@/lib/crypto';
 import { toVectorLiteral } from '@/lib/embeddings';
-import { slugify } from '@/core/orgs';
 
 describe('password hashing', () => {
   it('verifies a correct password and rejects a wrong one', async () => {

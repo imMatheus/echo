@@ -633,6 +633,7 @@ function ScopeMembers({ scopeId }: { scopeId: string }) {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="Add org member by email"
+          aria-label="Add org member by email"
         />
         <Button variant="outline" size="sm" type="submit" disabled={pending || !email.trim()}>
           {pending ? <Spinner /> : 'Add'}

@@ -174,6 +174,7 @@ export default function MemoryDetailPage() {
                 className="min-h-40"
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
+                aria-label="Memory content"
                 autoFocus
               />
               <div className="mt-3 flex justify-end gap-2">
@@ -248,6 +249,7 @@ export default function MemoryDetailPage() {
                     value={tagsDraft}
                     onChange={(e) => setTagsDraft(e.target.value)}
                     placeholder="comma, separated, tags"
+                    aria-label="Tags"
                     autoFocus
                   />
                   <Button variant="outline" size="sm" onClick={() => setEditingTags(false)} disabled={savingTags}>

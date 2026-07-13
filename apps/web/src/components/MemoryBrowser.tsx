@@ -4,6 +4,7 @@ import { LayersIcon, PlusIcon, SearchIcon } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import type { Memory, MemoryKind, MemorySearchResult, ScopeWithAccess } from '@echo/shared';
+import { MEMORY_KINDS } from '@echo/shared';
 import * as api from '../api';
 import { errorMessage } from '../api';
 import { KindBadge, ScopeBadge, SensitivityBadge, SourceChip, Tag } from './Badge';
@@ -24,14 +25,14 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
+import { useDebouncedValue } from '@/lib/use-debounced';
 import { cn } from '@/lib/utils';
 
 const PAGE_SIZE = 50;
 
 const KIND_ITEMS = [
   { value: 'all', label: 'All kinds' },
-  { value: 'explicit', label: 'explicit' },
-  { value: 'inferred', label: 'inferred' },
+  ...MEMORY_KINDS.map((k) => ({ value: k, label: k })),
 ];
 
 export function MemoryCard({ memory, scorePill }: { memory: Memory; scorePill?: ReactNode }) {
@@ -107,36 +108,37 @@ export function MemoryBrowser({
     allowAllScopes ? [{ value: 'all', label: 'All scopes' }] : undefined,
   );
 
+  // Only the free-text filters are debounced; scope/kind/pagination fetch immediately.
+  const debouncedSourceApp = useDebouncedValue(sourceApp);
+  const debouncedTag = useDebouncedValue(tag);
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    const timer = window.setTimeout(() => {
-      api
-        .listMemories({
-          scopeId: scopeId === 'all' ? undefined : scopeId || undefined,
-          kind: (kind === 'all' ? undefined : kind) as MemoryKind | undefined,
-          sourceApp: sourceApp.trim() || undefined,
-          tag: tag.trim() || undefined,
-          limit: PAGE_SIZE,
-          offset,
-        })
-        .then((res) => {
-          if (cancelled) return;
-          setMemories(res.memories);
-          setTotal(res.total);
-        })
-        .catch((err) => {
-          if (!cancelled) toast.error(errorMessage(err));
-        })
-        .finally(() => {
-          if (!cancelled) setLoading(false);
-        });
-    }, 250);
+    api
+      .listMemories({
+        scopeId: scopeId === 'all' ? undefined : scopeId || undefined,
+        kind: (kind === 'all' ? undefined : kind) as MemoryKind | undefined,
+        sourceApp: debouncedSourceApp.trim() || undefined,
+        tag: debouncedTag.trim() || undefined,
+        limit: PAGE_SIZE,
+        offset,
+      })
+      .then((res) => {
+        if (cancelled) return;
+        setMemories(res.memories);
+        setTotal(res.total);
+      })
+      .catch((err) => {
+        if (!cancelled) toast.error(errorMessage(err));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
     return () => {
       cancelled = true;
-      window.clearTimeout(timer);
     };
-  }, [scopeId, kind, sourceApp, tag, offset, refreshTick]);
+  }, [scopeId, kind, debouncedSourceApp, debouncedTag, offset, refreshTick]);
 
   const setFilter = (setter: (v: string) => void) => (value: string) => {
     setter(value);

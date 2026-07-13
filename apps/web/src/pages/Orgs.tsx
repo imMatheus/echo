@@ -4,6 +4,7 @@ import { Building2Icon, PlusIcon } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import type { OrganizationWithRole } from '@echo/shared';
+import { slugify } from '@echo/shared';
 import * as api from '@/api';
 import { errorMessage } from '@/api';
 import { RoleBadge } from '@/components/Badge';
@@ -22,14 +23,6 @@ import {
 import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
-
-export function slugify(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 48);
-}
 
 export default function OrgsPage() {
   const [orgs, setOrgs] = useState<OrganizationWithRole[] | null>(null);
@@ -108,7 +101,8 @@ function CreateOrgModal({ onClose }: { onClose: () => void }) {
 
   const onNameChange = (value: string) => {
     setName(value);
-    if (!slugTouched) setSlug(slugify(value));
+    // slugify falls back to "org" on empty input; keep the preview blank instead.
+    if (!slugTouched) setSlug(value.trim() ? slugify(value) : '');
   };
 
   const submit = async (e: FormEvent) => {

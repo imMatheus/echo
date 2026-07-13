@@ -103,7 +103,7 @@ export async function createMemory(app: AppContext, ctx: AuthContext, input: Cre
     action: 'memory.create',
     actorUserId: ctx.userId,
     apiKeyId: ctx.apiKeyId,
-    sourceApp: input.sourceApp?.trim() || ctx.sourceApp,
+    sourceApp: memory.sourceApp,
     memoryId: memory.id,
     scopeId: scope.id,
     orgId: scope.orgId,
@@ -192,15 +192,18 @@ export async function listMemories(
   const limit = Math.min(Math.max(query.limit ?? 50, 1), 200);
   const offset = Math.max(query.offset ?? 0, 0);
 
-  const totalRes = await app.db.query(`SELECT count(*)::int AS n FROM memories m WHERE ${where}`, params);
+  const countParams = [...params];
   params.push(limit, offset);
-  const { rows } = await app.db.query(
-    `SELECT ${MEMORY_COLS} FROM memories m ${MEMORY_JOINS}
-     WHERE ${where}
-     ORDER BY m.created_at DESC
-     LIMIT $${params.length - 1} OFFSET $${params.length}`,
-    params,
-  );
+  const [totalRes, { rows }] = await Promise.all([
+    app.db.query(`SELECT count(*)::int AS n FROM memories m WHERE ${where}`, countParams),
+    app.db.query(
+      `SELECT ${MEMORY_COLS} FROM memories m ${MEMORY_JOINS}
+       WHERE ${where}
+       ORDER BY m.created_at DESC
+       LIMIT $${params.length - 1} OFFSET $${params.length}`,
+      params,
+    ),
+  ]);
 
   if (ctx.via === 'api_key') {
     await logAudit(app, {
@@ -308,13 +311,6 @@ export async function searchMemories(
 
   // Actor-level audit keeps the query; per-org rows omit it (queries can carry
   // personal information the org has no right to see).
-  await logAudit(app, {
-    action: 'memory.recall',
-    actorUserId: ctx.userId,
-    apiKeyId: ctx.apiKeyId,
-    sourceApp: ctx.sourceApp,
-    details: { query: req.query, count: results.length, mode: embedded ? 'hybrid' : 'fts' },
-  });
   const byOrg = new Map<string, string[]>();
   for (const row of rows) {
     if (row.scope_org_id) {
@@ -323,16 +319,25 @@ export async function searchMemories(
       byOrg.set(row.scope_org_id, list);
     }
   }
-  for (const [orgId, memoryIds] of byOrg) {
-    await logAudit(app, {
+  await Promise.all([
+    logAudit(app, {
       action: 'memory.recall',
       actorUserId: ctx.userId,
       apiKeyId: ctx.apiKeyId,
       sourceApp: ctx.sourceApp,
-      orgId,
-      details: { count: memoryIds.length, memoryIds },
-    });
-  }
+      details: { query: req.query, count: results.length, mode: embedded ? 'hybrid' : 'fts' },
+    }),
+    ...[...byOrg].map(([orgId, memoryIds]) =>
+      logAudit(app, {
+        action: 'memory.recall',
+        actorUserId: ctx.userId,
+        apiKeyId: ctx.apiKeyId,
+        sourceApp: ctx.sourceApp,
+        orgId,
+        details: { count: memoryIds.length, memoryIds },
+      }),
+    ),
+  ]);
 
   return { results, mode: embedded ? 'hybrid' : 'fts' };
 }
