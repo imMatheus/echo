@@ -1,7 +1,7 @@
 import type { Organization, OrganizationWithRole, OrgMember, OrgRole, OrgScopeType, ScopeMember } from '@echo/shared';
-import { badRequest, conflict, forbidden, notFound } from '../lib/http-error.js';
-import type { AppContext, AuthContext } from '../types.js';
-import { logAudit } from './audit.js';
+import { badRequest, conflict, forbidden, notFound } from '@/lib/http-error';
+import type { AppContext, AuthContext } from '@/types';
+import { logAudit } from './audit';
 
 function mapOrg(row: any): Organization {
   return { id: row.id, name: row.name, slug: row.slug, createdAt: row.created_at.toISOString() };

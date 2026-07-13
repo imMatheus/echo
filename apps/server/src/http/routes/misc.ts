@@ -1,11 +1,11 @@
 import type { ServerMeta } from '@echo/shared';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { listUserAudit } from '../../core/audit.js';
-import { VERSION } from '../../config.js';
-import { parse } from '../../lib/validate.js';
-import type { AppContext } from '../../types.js';
-import { requireAuth } from '../authn.js';
+import { listUserAudit } from '@/core/audit';
+import { VERSION } from '@/config';
+import { parse } from '@/lib/validate';
+import type { AppContext } from '@/types';
+import { requireAuth } from '@/http/authn';
 
 const auditQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50),

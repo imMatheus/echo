@@ -1,21 +1,37 @@
 import { useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
+import { LayersIcon } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { toast } from 'sonner';
 import type { Memory } from '@echo/shared';
-import * as api from '../api';
-import { ApiRequestError, errorMessage } from '../api';
-import { KindBadge, ScopeBadge, SensitivityBadge, SourceChip, Tag } from '../components/Badge';
-import { CopyButton } from '../components/CodeBlock';
-import { ConfirmDialog } from '../components/ConfirmDialog';
-import { EmptyState } from '../components/EmptyState';
-import { RelativeTime } from '../components/RelativeTime';
-import { PageLoading, Spinner } from '../components/Spinner';
-import { useToast } from '../components/Toast';
-import { EmptyMemoriesIcon } from '../components/icons';
+import * as api from '@/api';
+import { ApiRequestError, errorMessage } from '@/api';
+import { KindBadge, ScopeBadge, SensitivityBadge, SourceChip, Tag } from '@/components/Badge';
+import { CopyButton } from '@/components/CodeBlock';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { EmptyState } from '@/components/EmptyState';
+import { PageHeader } from '@/components/PageHeader';
+import { PageLoading } from '@/components/PageLoading';
+import { RelativeTime } from '@/components/RelativeTime';
+import { Button, buttonVariants } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Spinner } from '@/components/ui/spinner';
+import { Textarea } from '@/components/ui/textarea';
+import { cn } from '@/lib/utils';
+
+function MetaItem({ label, children, full }: { label: string; children: ReactNode; full?: boolean }) {
+  return (
+    <div className={cn('flex min-w-0 flex-col gap-1 border-b py-2.5', full && 'md:col-span-2')}>
+      <dt className="text-[0.625rem] font-medium uppercase tracking-wider text-muted-foreground">{label}</dt>
+      <dd className="flex flex-wrap items-center gap-1.5 text-xs/relaxed [overflow-wrap:anywhere]">{children}</dd>
+    </div>
+  );
+}
 
 export default function MemoryDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const toast = useToast();
 
   const [memory, setMemory] = useState<Memory | null>(null);
   const [notFound, setNotFound] = useState(false);
@@ -53,18 +69,18 @@ export default function MemoryDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [id, toast]);
+  }, [id]);
 
   if (loading) return <PageLoading />;
 
   if (notFound || !memory) {
     return (
       <EmptyState
-        icon={<EmptyMemoriesIcon />}
+        icon={<LayersIcon />}
         title="Memory not found"
         description="This memory may have been deleted or expired."
         action={
-          <Link to="/" className="btn">
+          <Link to="/" className={cn(buttonVariants({ variant: 'outline' }))}>
             Back to memories
           </Link>
         }
@@ -133,187 +149,154 @@ export default function MemoryDetailPage() {
   const hasMetadata = Object.keys(memory.metadata).length > 0;
 
   return (
-    <div>
-      <div className="page-header">
-        <div>
-          <div className="row" style={{ marginBottom: 6 }}>
-            <Link to="/" className="muted small">
-              ← Memories
-            </Link>
-          </div>
-          <h1>Memory</h1>
-        </div>
-        <span className="spacer" />
-        {!editing && (
-          <button type="button" className="btn" onClick={startEdit}>
-            Edit
-          </button>
-        )}
-      </div>
+    <div className="flex flex-col gap-4">
+      <PageHeader
+        title="Memory"
+        backLink={
+          <Link to="/" className="text-xs text-muted-foreground hover:text-foreground">
+            ← Memories
+          </Link>
+        }
+        actions={
+          !editing && (
+            <Button variant="outline" onClick={startEdit}>
+              Edit
+            </Button>
+          )
+        }
+      />
 
-      <div className="card">
-        {editing ? (
-          <div>
-            <textarea
-              className="textarea"
-              style={{ minHeight: 160 }}
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              autoFocus
-            />
-            <div className="row" style={{ justifyContent: 'flex-end', marginTop: 12 }}>
-              <button type="button" className="btn" onClick={() => setEditing(false)} disabled={saving}>
-                Cancel
-              </button>
-              <button type="button" className="btn btn-primary" onClick={() => void saveContent()} disabled={saving}>
-                {saving && <Spinner size={13} />}
-                Save
-              </button>
+      <Card className="-mt-2">
+        <CardContent>
+          {editing ? (
+            <div>
+              <Textarea
+                className="min-h-40"
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                autoFocus
+              />
+              <div className="mt-3 flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setEditing(false)} disabled={saving}>
+                  Cancel
+                </Button>
+                <Button onClick={() => void saveContent()} disabled={saving}>
+                  {saving && <Spinner />}
+                  Save
+                </Button>
+              </div>
             </div>
-          </div>
-        ) : (
-          <p className="memory-detail-content">{memory.content}</p>
-        )}
-      </div>
+          ) : (
+            <p className="whitespace-pre-wrap text-sm leading-relaxed [overflow-wrap:anywhere]">
+              {memory.content}
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
-      <div className="card">
-        <div className="card-title-row">
-          <h2>Details</h2>
-        </div>
-        <dl className="meta-grid">
-          <div className="meta-item">
-            <dt>Scope</dt>
-            <dd>
+      <Card>
+        <CardHeader>
+          <CardTitle>Details</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <dl className="grid grid-cols-1 gap-x-8 md:grid-cols-2">
+            <MetaItem label="Scope">
               <ScopeBadge type={memory.scopeType} name={memory.scopeName} />
-            </dd>
-          </div>
-          <div className="meta-item">
-            <dt>Kind</dt>
-            <dd>
+            </MetaItem>
+            <MetaItem label="Kind">
               <KindBadge kind={memory.kind} />
-            </dd>
-          </div>
-          <div className="meta-item">
-            <dt>Confidence</dt>
-            <dd>{memory.confidence}</dd>
-          </div>
-          <div className="meta-item">
-            <dt>Sensitivity</dt>
-            <dd>
-              {memory.sensitivity === 'normal' ? (
-                'normal'
-              ) : (
-                <SensitivityBadge sensitivity={memory.sensitivity} />
-              )}
-            </dd>
-          </div>
-          <div className="meta-item">
-            <dt>Source app</dt>
-            <dd>
+            </MetaItem>
+            <MetaItem label="Confidence">{memory.confidence}</MetaItem>
+            <MetaItem label="Sensitivity">
+              {memory.sensitivity === 'normal' ? 'normal' : <SensitivityBadge sensitivity={memory.sensitivity} />}
+            </MetaItem>
+            <MetaItem label="Source app">
               <SourceChip app={memory.sourceApp} />
-            </dd>
-          </div>
-          <div className="meta-item">
-            <dt>Created by</dt>
-            <dd>{memory.createdByName ?? <span className="muted">—</span>}</dd>
-          </div>
-          <div className="meta-item">
-            <dt>Created</dt>
-            <dd>
+            </MetaItem>
+            <MetaItem label="Created by">
+              {memory.createdByName ?? <span className="text-muted-foreground">—</span>}
+            </MetaItem>
+            <MetaItem label="Created">
               <RelativeTime date={memory.createdAt} />
-            </dd>
-          </div>
-          <div className="meta-item">
-            <dt>Updated</dt>
-            <dd>
+            </MetaItem>
+            <MetaItem label="Updated">
               <RelativeTime date={memory.updatedAt} />
-            </dd>
-          </div>
-          <div className="meta-item">
-            <dt>Expires</dt>
-            <dd>{memory.expiresAt ? <RelativeTime date={memory.expiresAt} /> : <span className="muted">Never</span>}</dd>
-          </div>
-          <div className="meta-item">
-            <dt>Embedding model</dt>
-            <dd>
-              {memory.embeddingModel ? (
-                <span className="mono">{memory.embeddingModel}</span>
+            </MetaItem>
+            <MetaItem label="Expires">
+              {memory.expiresAt ? (
+                <RelativeTime date={memory.expiresAt} />
               ) : (
-                <span className="muted">none</span>
+                <span className="text-muted-foreground">Never</span>
               )}
-            </dd>
-          </div>
-          <div className="meta-item full">
-            <dt>Memory ID</dt>
-            <dd>
-              <span className="mono">{memory.id}</span>
+            </MetaItem>
+            <MetaItem label="Embedding model">
+              {memory.embeddingModel ? (
+                <span className="font-mono text-xs">{memory.embeddingModel}</span>
+              ) : (
+                <span className="text-muted-foreground">none</span>
+              )}
+            </MetaItem>
+            <MetaItem label="Memory ID" full>
+              <span className="font-mono text-xs">{memory.id}</span>
               <CopyButton text={memory.id} label="Copy memory ID" />
-            </dd>
-          </div>
-          <div className="meta-item full">
-            <dt>Tags</dt>
-            <dd>
+            </MetaItem>
+            <MetaItem label="Tags" full>
               {editingTags ? (
-                <div className="row" style={{ width: '100%' }}>
-                  <input
-                    className="input"
+                <div className="flex w-full items-center gap-2">
+                  <Input
+                    className="flex-1"
                     value={tagsDraft}
                     onChange={(e) => setTagsDraft(e.target.value)}
                     placeholder="comma, separated, tags"
                     autoFocus
-                    style={{ flex: 1 }}
                   />
-                  <button type="button" className="btn btn-sm" onClick={() => setEditingTags(false)} disabled={savingTags}>
+                  <Button variant="outline" size="sm" onClick={() => setEditingTags(false)} disabled={savingTags}>
                     Cancel
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-primary btn-sm"
-                    onClick={() => void saveTags()}
-                    disabled={savingTags}
-                  >
-                    {savingTags && <Spinner size={12} />}
+                  </Button>
+                  <Button size="sm" onClick={() => void saveTags()} disabled={savingTags}>
+                    {savingTags && <Spinner />}
                     Save
-                  </button>
+                  </Button>
                 </div>
               ) : (
                 <>
-                  {memory.tags.length === 0 && <span className="muted">No tags</span>}
+                  {memory.tags.length === 0 && <span className="text-muted-foreground">No tags</span>}
                   {memory.tags.map((t) => (
                     <Tag key={t} tag={t} />
                   ))}
-                  <button type="button" className="btn btn-ghost btn-sm" onClick={startEditTags}>
+                  <Button variant="ghost" size="sm" onClick={startEditTags}>
                     Edit
-                  </button>
+                  </Button>
                 </>
               )}
-            </dd>
-          </div>
-          {hasMetadata && (
-            <div className="meta-item full">
-              <dt>Metadata</dt>
-              <dd>
-                <pre className="details-json" style={{ width: '100%' }}>
+            </MetaItem>
+            {hasMetadata && (
+              <MetaItem label="Metadata" full>
+                <pre className="w-full whitespace-pre-wrap font-mono text-xs text-muted-foreground [overflow-wrap:anywhere]">
                   {JSON.stringify(memory.metadata, null, 2)}
                 </pre>
-              </dd>
-            </div>
-          )}
-        </dl>
-      </div>
+              </MetaItem>
+            )}
+          </dl>
+        </CardContent>
+      </Card>
 
-      <div className="card danger-zone">
-        <div className="card-title-row">
-          <h2>Danger zone</h2>
-        </div>
-        <div className="row">
-          <span className="muted small">Deleting a memory removes it from every AI app connected to Echo.</span>
-          <span className="spacer" />
-          <button type="button" className="btn btn-danger" onClick={() => setConfirmDelete(true)}>
-            Delete memory
-          </button>
-        </div>
-      </div>
+      <Card className="border-destructive/35">
+        <CardHeader>
+          <CardTitle className="text-destructive">Danger zone</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-muted-foreground">
+              Deleting a memory removes it from every AI app connected to Echo.
+            </span>
+            <span className="flex-1" />
+            <Button variant="destructive" onClick={() => setConfirmDelete(true)}>
+              Delete memory
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       {confirmDelete && (
         <ConfirmDialog

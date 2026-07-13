@@ -1,8 +1,8 @@
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import type { FastifyInstance, FastifyReply } from 'fastify';
-import type { AppContext } from '../types.js';
-import { requireApiKeyAuth } from '../http/authn.js';
-import { buildMcpServer } from './tools.js';
+import type { AppContext } from '@/types';
+import { requireApiKeyAuth } from '@/http/authn';
+import { buildMcpServer } from './tools';
 
 function jsonRpcError(reply: FastifyReply, status: number, code: number, message: string): void {
   reply.code(status).send({ jsonrpc: '2.0', error: { code, message }, id: null });

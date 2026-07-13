@@ -1,8 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { ServerMeta } from '@echo/shared';
-import * as api from '../api';
-import { CodeBlock } from '../components/CodeBlock';
+import * as api from '@/api';
+import { CodeBlock } from '@/components/CodeBlock';
+import { PageHeader } from '@/components/PageHeader';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 
 const MCP_TOOLS: Array<{ name: string; description: string }> = [
   { name: 'remember_context', description: 'Store a new memory (content, scope, kind, tags, confidence).' },
@@ -11,6 +15,8 @@ const MCP_TOOLS: Array<{ name: string; description: string }> = [
   { name: 'forget_context', description: 'Delete a memory by id.' },
   { name: 'list_scopes', description: 'List the scopes the key can read and write.' },
 ];
+
+const INLINE_CODE = 'rounded bg-muted px-1 py-px font-mono text-[0.7rem]';
 
 export default function ConnectPage() {
   const [meta, setMeta] = useState<ServerMeta | null>(null);
@@ -44,87 +50,98 @@ export default function ConnectPage() {
 
   return (
     <div>
-      <div className="page-header">
-        <div>
-          <h1>Connect AI apps</h1>
-          <p className="subtitle">
+      <PageHeader
+        title="Connect AI apps"
+        subtitle={
+          <>
             Wire Claude, Cursor, or any MCP client to this Echo server. First,{' '}
-            <Link to="/keys">create an API key</Link> — then replace <code>YOUR_API_KEY</code> below.
-          </p>
-        </div>
-      </div>
+            <Link to="/keys" className="font-medium text-foreground underline underline-offset-4">
+              create an API key
+            </Link>{' '}
+            — then replace <code className={INLINE_CODE}>YOUR_API_KEY</code> below.
+          </>
+        }
+      />
 
       {meta && (
-        <div style={{ marginBottom: 20 }}>
-          {meta.embeddings ? (
-            <span className="status-line">
-              <span className="status-dot ok" />
-              Semantic search: {meta.embeddings.provider}/{meta.embeddings.model}
-            </span>
-          ) : (
-            <span className="status-line">
-              <span className="status-dot warn" />
-              Keyword search only — configure EMBEDDINGS_PROVIDER for semantic recall
-            </span>
-          )}
+        <div className="mb-5">
+          <Badge variant="outline" className="gap-2 py-1 pl-2.5 pr-3 text-muted-foreground">
+            <span className={cn('size-2 shrink-0 rounded-full', meta.embeddings ? 'bg-success' : 'bg-warning')} />
+            {meta.embeddings
+              ? `Semantic search: ${meta.embeddings.provider}/${meta.embeddings.model}`
+              : 'Keyword search only — configure EMBEDDINGS_PROVIDER for semantic recall'}
+          </Badge>
         </div>
       )}
 
-      <div className="connect-card">
-        <h2>Claude Code</h2>
-        <p className="desc">Add Echo as a remote MCP server with one command.</p>
-        <CodeBlock
-          code={`claude mcp add --transport http echo ${origin}/mcp --header "Authorization: Bearer YOUR_API_KEY"`}
-        />
-      </div>
+      <div className="flex flex-col gap-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>Claude Code</CardTitle>
+            <CardDescription>Add Echo as a remote MCP server with one command.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <CodeBlock
+              code={`claude mcp add --transport http echo ${origin}/mcp --header "Authorization: Bearer YOUR_API_KEY"`}
+            />
+          </CardContent>
+        </Card>
 
-      <div className="connect-card">
-        <h2>Claude Desktop / Cursor (stdio bridge)</h2>
-        <p className="desc">
-          For clients that only speak stdio, use the <code>echo-context-mcp</code> bridge. Add this to your MCP
-          config file (e.g. <code>claude_desktop_config.json</code> or <code>.cursor/mcp.json</code>).
-        </p>
-        <CodeBlock code={stdioConfig} />
-      </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Claude Desktop / Cursor (stdio bridge)</CardTitle>
+            <CardDescription>
+              For clients that only speak stdio, use the <code className={INLINE_CODE}>echo-context-mcp</code>{' '}
+              bridge. Add this to your MCP config file (e.g.{' '}
+              <code className={INLINE_CODE}>claude_desktop_config.json</code> or{' '}
+              <code className={INLINE_CODE}>.cursor/mcp.json</code>).
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <CodeBlock code={stdioConfig} />
+          </CardContent>
+        </Card>
 
-      <div className="connect-card">
-        <h2>Any remote-MCP client</h2>
-        <p className="desc">Echo speaks Streamable HTTP MCP — point any compatible client at the endpoint.</p>
-        <div className="field">
-          <label>Endpoint</label>
-          <CodeBlock code={`${origin}/mcp`} />
-        </div>
-        <div className="field" style={{ marginBottom: 0 }}>
-          <label>Header</label>
-          <CodeBlock code={`Authorization: Bearer YOUR_API_KEY`} />
-        </div>
-      </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Any remote-MCP client</CardTitle>
+            <CardDescription>
+              Echo speaks Streamable HTTP MCP — point any compatible client at the endpoint.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3.5">
+            <div>
+              <div className="mb-1.5 text-xs font-medium text-muted-foreground">Endpoint</div>
+              <CodeBlock code={`${origin}/mcp`} />
+            </div>
+            <div>
+              <div className="mb-1.5 text-xs font-medium text-muted-foreground">Header</div>
+              <CodeBlock code={`Authorization: Bearer YOUR_API_KEY`} />
+            </div>
+          </CardContent>
+        </Card>
 
-      <div className="connect-card">
-        <h2>Available tools</h2>
-        <p className="desc">Every connected app gets these five MCP tools.</p>
-        <div className="table-wrap">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Tool</th>
-                <th>Description</th>
-              </tr>
-            </thead>
-            <tbody>
-              {MCP_TOOLS.map((tool) => (
-                <tr key={tool.name}>
-                  <td>
-                    <span className="chip-mono" style={{ color: 'var(--text)' }}>
-                      {tool.name}
-                    </span>
-                  </td>
-                  <td className="muted">{tool.description}</td>
-                </tr>
+        <Card>
+          <CardHeader>
+            <CardTitle>Available tools</CardTitle>
+            <CardDescription>Every connected app gets these five MCP tools.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-hidden rounded-lg border">
+              {MCP_TOOLS.map((tool, i) => (
+                <div
+                  key={tool.name}
+                  className={cn('flex flex-wrap items-baseline gap-x-4 gap-y-1 px-3 py-2.5', i > 0 && 'border-t')}
+                >
+                  <Badge variant="outline" className="w-36 justify-start rounded-md font-mono">
+                    {tool.name}
+                  </Badge>
+                  <span className="min-w-0 flex-1 text-xs/relaxed text-muted-foreground">{tool.description}</span>
+                </div>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

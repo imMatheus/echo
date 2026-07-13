@@ -1,14 +1,26 @@
 import { useEffect, useState } from 'react';
+import { ChevronRightIcon, ScrollTextIcon } from 'lucide-react';
+import { toast } from 'sonner';
 import type { AuditEntry, AuditListResponse } from '@echo/shared';
 import type { AuditQuery } from '../api';
 import { errorMessage } from '../api';
 import { SourceChip } from './Badge';
 import { EmptyState } from './EmptyState';
+import { PageLoading } from './PageLoading';
 import { Pagination } from './Pagination';
 import { RelativeTime } from './RelativeTime';
-import { PageLoading } from './Spinner';
-import { useToast } from './Toast';
-import { EmptyAuditIcon } from './icons';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 
 const PAGE_SIZE = 50;
 
@@ -17,7 +29,11 @@ function DetailsRow({ entry }: { entry: AuditEntry }) {
   if (entry.memoryId) details.memoryId = entry.memoryId;
   if (entry.scopeId) details.scopeId = entry.scopeId;
   if (entry.orgId) details.orgId = entry.orgId;
-  return <pre className="details-json">{JSON.stringify(details, null, 2)}</pre>;
+  return (
+    <pre className="whitespace-pre-wrap font-mono text-xs text-muted-foreground [overflow-wrap:anywhere]">
+      {JSON.stringify(details, null, 2)}
+    </pre>
+  );
 }
 
 /**
@@ -29,7 +45,6 @@ export function AuditTable({
 }: {
   fetchPage: (q: AuditQuery) => Promise<AuditListResponse>;
 }) {
-  const toast = useToast();
   const [entries, setEntries] = useState<AuditEntry[] | null>(null);
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
@@ -58,16 +73,15 @@ export function AuditTable({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [fetchPage, offset, action, toast]);
+  }, [fetchPage, offset, action]);
 
   if (entries === null && loading) return <PageLoading />;
 
   return (
     <div>
-      <div className="filters-row">
-        <input
-          className="input"
-          style={{ minWidth: 220 }}
+      <div className="mb-4 flex flex-wrap gap-2">
+        <Input
+          className="w-60"
           value={action}
           onChange={(e) => {
             setAction(e.target.value);
@@ -80,7 +94,7 @@ export function AuditTable({
 
       {entries && entries.length === 0 ? (
         <EmptyState
-          icon={<EmptyAuditIcon />}
+          icon={<ScrollTextIcon />}
           title={action ? 'No matching events' : 'No activity yet'}
           description={
             action
@@ -90,18 +104,18 @@ export function AuditTable({
         />
       ) : (
         <>
-          <div className="table-wrap" style={loading ? { opacity: 0.55 } : undefined}>
-            <table className="table">
-              <thead>
-                <tr>
-                  <th style={{ width: 90 }}>Time</th>
-                  <th>Action</th>
-                  <th>Source</th>
-                  <th>API key</th>
-                  <th style={{ width: 90 }}>Details</th>
-                </tr>
-              </thead>
-              <tbody>
+          <div className={cn('overflow-x-auto rounded-xl border bg-card', loading && 'opacity-55')}>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-22">Time</TableHead>
+                  <TableHead>Action</TableHead>
+                  <TableHead>Source</TableHead>
+                  <TableHead>API key</TableHead>
+                  <TableHead className="w-22">Details</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {(entries ?? []).map((entry) => {
                   const isOpen = expanded === entry.id;
                   const hasDetails =
@@ -119,8 +133,8 @@ export function AuditTable({
                     />
                   );
                 })}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
           <Pagination offset={offset} limit={PAGE_SIZE} total={total} onChange={setOffset} />
         </>
@@ -142,36 +156,36 @@ function FragmentRow({
 }) {
   return (
     <>
-      <tr>
-        <td className="muted" style={{ whiteSpace: 'nowrap' }}>
+      <TableRow>
+        <TableCell className="whitespace-nowrap text-muted-foreground">
           <RelativeTime date={entry.occurredAt} />
-        </td>
-        <td>
-          <span className="chip-mono" style={{ color: 'var(--text)' }}>
+        </TableCell>
+        <TableCell>
+          <Badge variant="outline" className="rounded-md font-mono">
             {entry.action}
-          </span>
-        </td>
-        <td>
+          </Badge>
+        </TableCell>
+        <TableCell>
           <SourceChip app={entry.sourceApp} />
-        </td>
-        <td className="muted">{entry.apiKeyName ?? '—'}</td>
-        <td>
+        </TableCell>
+        <TableCell className="text-muted-foreground">{entry.apiKeyName ?? '—'}</TableCell>
+        <TableCell>
           {hasDetails ? (
-            <button type="button" className="expander" onClick={onToggle} aria-expanded={isOpen}>
-              <span className={`arrow${isOpen ? ' open' : ''}`}>▸</span>
+            <Button variant="ghost" size="sm" onClick={onToggle} aria-expanded={isOpen}>
+              <ChevronRightIcon className={cn('transition-transform', isOpen && 'rotate-90')} />
               {isOpen ? 'Hide' : 'Show'}
-            </button>
+            </Button>
           ) : (
-            <span className="muted">—</span>
+            <span className="text-muted-foreground">—</span>
           )}
-        </td>
-      </tr>
+        </TableCell>
+      </TableRow>
       {isOpen && (
-        <tr>
-          <td colSpan={5} className="expanded-cell">
+        <TableRow className="hover:bg-transparent">
+          <TableCell colSpan={5} className="bg-background px-4 py-3">
             <DetailsRow entry={entry} />
-          </td>
-        </tr>
+          </TableCell>
+        </TableRow>
       )}
     </>
   );

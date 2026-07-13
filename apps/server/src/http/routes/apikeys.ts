@@ -1,9 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { createApiKey, listApiKeys, revokeApiKey } from '../../core/apikeys.js';
-import { parse } from '../../lib/validate.js';
-import type { AppContext } from '../../types.js';
-import { requireAuth } from '../authn.js';
+import { createApiKey, listApiKeys, revokeApiKey } from '@/core/apikeys';
+import { parse } from '@/lib/validate';
+import type { AppContext } from '@/types';
+import { requireAuth } from '@/http/authn';
 
 const createSchema = z.object({
   name: z.string().min(1).max(100),

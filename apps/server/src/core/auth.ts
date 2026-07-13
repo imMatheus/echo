@@ -1,8 +1,8 @@
 import type { User } from '@echo/shared';
-import { generateSessionToken, hashPassword, sha256Hex, verifyPassword } from '../lib/crypto.js';
-import { conflict, unauthorized } from '../lib/http-error.js';
-import type { AppContext } from '../types.js';
-import { logAudit } from './audit.js';
+import { generateSessionToken, hashPassword, sha256Hex, verifyPassword } from '@/lib/crypto';
+import { conflict, unauthorized } from '@/lib/http-error';
+import type { AppContext } from '@/types';
+import { logAudit } from './audit';
 
 export function mapUser(row: any): User {
   return {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { generateApiKey, hashPassword, sha256Hex, verifyPassword } from '../src/lib/crypto.js';
-import { toVectorLiteral } from '../src/lib/embeddings.js';
-import { slugify } from '../src/core/orgs.js';
+import { generateApiKey, hashPassword, sha256Hex, verifyPassword } from '@/lib/crypto';
+import { toVectorLiteral } from '@/lib/embeddings';
+import { slugify } from '@/core/orgs';
 
 describe('password hashing', () => {
   it('verifies a correct password and rejects a wrong one', async () => {

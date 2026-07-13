@@ -1,8 +1,8 @@
 import type { FastifyRequest } from 'fastify';
-import { resolveApiKey } from '../core/apikeys.js';
-import { getSessionUser } from '../core/auth.js';
-import { unauthorized } from '../lib/http-error.js';
-import type { AppContext, AuthContext } from '../types.js';
+import { resolveApiKey } from '@/core/apikeys';
+import { getSessionUser } from '@/core/auth';
+import { unauthorized } from '@/lib/http-error';
+import type { AppContext, AuthContext } from '@/types';
 
 export const SESSION_COOKIE = 'echo_session';
 

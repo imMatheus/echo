@@ -1,10 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { createSession, destroySession, getPersonalScopeId, getUserById, login, signup } from '../../core/auth.js';
-import { HttpError } from '../../lib/http-error.js';
-import { parse } from '../../lib/validate.js';
-import type { AppContext } from '../../types.js';
-import { requireAuth, SESSION_COOKIE } from '../authn.js';
+import { createSession, destroySession, getPersonalScopeId, getUserById, login, signup } from '@/core/auth';
+import { HttpError } from '@/lib/http-error';
+import { parse } from '@/lib/validate';
+import type { AppContext } from '@/types';
+import { requireAuth, SESSION_COOKIE } from '@/http/authn';
 
 const signupSchema = z.object({
   email: z.string().email().max(254),

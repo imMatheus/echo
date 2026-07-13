@@ -9,9 +9,38 @@ import type {
 } from '@echo/shared';
 import * as api from '../api';
 import { errorMessage } from '../api';
-import { Modal } from './Modal';
-import { ScopeOptions } from './ScopeOptions';
-import { Spinner } from './Spinner';
+import { ScopeSelectItems, scopeSelectItems } from './ScopeOptions';
+import { Alert, AlertTitle } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Field, FieldGroup, FieldLabel } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Spinner } from '@/components/ui/spinner';
+import { Textarea } from '@/components/ui/textarea';
+
+const KIND_ITEMS = [
+  { value: 'explicit', label: 'explicit' },
+  { value: 'inferred', label: 'inferred' },
+];
+
+const SENSITIVITY_ITEMS = [
+  { value: 'low', label: 'low' },
+  { value: 'normal', label: 'normal' },
+  { value: 'high', label: 'high' },
+];
 
 export function MemoryFormModal({
   scopes,
@@ -91,100 +120,131 @@ export function MemoryFormModal({
   };
 
   return (
-    <Modal title="New memory" onClose={onClose} width={560}>
-      <form onSubmit={(e) => void submit(e)}>
-        {error && <div className="form-error">{error}</div>}
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-[560px]">
+        <DialogHeader>
+          <DialogTitle>New memory</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={(e) => void submit(e)}>
+          <FieldGroup>
+            {error && (
+              <Alert variant="destructive">
+                <AlertTitle>{error}</AlertTitle>
+              </Alert>
+            )}
 
-        <div className="field">
-          <label htmlFor="mem-content">Content</label>
-          <textarea
-            id="mem-content"
-            className="textarea"
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            placeholder="What should your AI tools remember?"
-            autoFocus
-            required
-          />
-        </div>
+            <Field>
+              <FieldLabel htmlFor="mem-content">Content</FieldLabel>
+              <Textarea
+                id="mem-content"
+                className="min-h-28"
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                placeholder="What should your AI tools remember?"
+                autoFocus
+                required
+              />
+            </Field>
 
-        <div className="field">
-          <label htmlFor="mem-scope">Scope</label>
-          <select id="mem-scope" className="select" value={scopeId} onChange={(e) => setScopeId(e.target.value)}>
-            <ScopeOptions scopes={writable} />
-          </select>
-        </div>
+            <Field>
+              <FieldLabel htmlFor="mem-scope">Scope</FieldLabel>
+              <Select
+                items={scopeSelectItems(writable)}
+                value={scopeId}
+                onValueChange={(v) => setScopeId(v as string)}
+              >
+                <SelectTrigger id="mem-scope" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <ScopeSelectItems scopes={writable} />
+                </SelectContent>
+              </Select>
+            </Field>
 
-        <div className="field-row">
-          <div className="field">
-            <label htmlFor="mem-kind">Kind</label>
-            <select id="mem-kind" className="select" value={kind} onChange={(e) => setKind(e.target.value as MemoryKind)}>
-              <option value="explicit">explicit</option>
-              <option value="inferred">inferred</option>
-            </select>
-          </div>
-          <div className="field">
-            <label htmlFor="mem-sensitivity">Sensitivity</label>
-            <select
-              id="mem-sensitivity"
-              className="select"
-              value={sensitivity}
-              onChange={(e) => setSensitivity(e.target.value as Sensitivity)}
-            >
-              <option value="low">low</option>
-              <option value="normal">normal</option>
-              <option value="high">high</option>
-            </select>
-          </div>
-        </div>
+            <div className="grid grid-cols-2 gap-3 max-sm:grid-cols-1">
+              <Field>
+                <FieldLabel htmlFor="mem-kind">Kind</FieldLabel>
+                <Select items={KIND_ITEMS} value={kind} onValueChange={(v) => setKind(v as MemoryKind)}>
+                  <SelectTrigger id="mem-kind" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {KIND_ITEMS.map((item) => (
+                      <SelectItem key={item.value} value={item.value}>
+                        {item.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="mem-sensitivity">Sensitivity</FieldLabel>
+                <Select
+                  items={SENSITIVITY_ITEMS}
+                  value={sensitivity}
+                  onValueChange={(v) => setSensitivity(v as Sensitivity)}
+                >
+                  <SelectTrigger id="mem-sensitivity" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SENSITIVITY_ITEMS.map((item) => (
+                      <SelectItem key={item.value} value={item.value}>
+                        {item.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+            </div>
 
-        <div className="field-row">
-          <div className="field">
-            <label htmlFor="mem-confidence">Confidence (0–1)</label>
-            <input
-              id="mem-confidence"
-              className="input"
-              type="number"
-              min={0}
-              max={1}
-              step={0.05}
-              value={confidence}
-              onChange={(e) => setConfidence(e.target.value)}
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="mem-expires">Expires (optional)</label>
-            <input
-              id="mem-expires"
-              className="input"
-              type="datetime-local"
-              value={expiresAt}
-              onChange={(e) => setExpiresAt(e.target.value)}
-            />
-          </div>
-        </div>
+            <div className="grid grid-cols-2 gap-3 max-sm:grid-cols-1">
+              <Field>
+                <FieldLabel htmlFor="mem-confidence">Confidence (0–1)</FieldLabel>
+                <Input
+                  id="mem-confidence"
+                  type="number"
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={confidence}
+                  onChange={(e) => setConfidence(e.target.value)}
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="mem-expires">Expires (optional)</FieldLabel>
+                <Input
+                  id="mem-expires"
+                  type="datetime-local"
+                  value={expiresAt}
+                  onChange={(e) => setExpiresAt(e.target.value)}
+                />
+              </Field>
+            </div>
 
-        <div className="field">
-          <label htmlFor="mem-tags">Tags</label>
-          <input
-            id="mem-tags"
-            className="input"
-            value={tags}
-            onChange={(e) => setTags(e.target.value)}
-            placeholder="comma, separated, tags"
-          />
-        </div>
+            <Field>
+              <FieldLabel htmlFor="mem-tags">Tags</FieldLabel>
+              <Input
+                id="mem-tags"
+                value={tags}
+                onChange={(e) => setTags(e.target.value)}
+                placeholder="comma, separated, tags"
+              />
+            </Field>
+          </FieldGroup>
 
-        <div className="modal-footer" style={{ padding: '14px 0 0', borderTop: '1px solid var(--border)' }}>
-          <button type="button" className="btn" onClick={onClose} disabled={pending}>
-            Cancel
-          </button>
-          <button type="submit" className="btn btn-primary" disabled={pending}>
-            {pending && <Spinner size={13} />}
-            Create memory
-          </button>
-        </div>
-      </form>
-    </Modal>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" type="button" onClick={onClose} disabled={pending}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={pending}>
+              {pending && <Spinner />}
+              Create memory
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -5,7 +5,7 @@ End-to-end checks against a running server (no test framework, just node).
 ```bash
 # terminal 1: database + server
 docker compose -f docker-compose.dev.yml up -d
-pnpm build && node apps/server/dist/index.js
+bun run build && bun run start
 
 # terminal 2: full API/MCP/privacy suite (51 assertions) against :3246
 node scripts/smoke.mjs

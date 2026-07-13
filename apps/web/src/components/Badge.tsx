@@ -1,11 +1,21 @@
 import type { MemoryKind, OrgRole, ScopeType, Sensitivity } from '@echo/shared';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
+
+const SCOPE_CLASSES: Record<ScopeType, string> = {
+  personal: 'border-scope-personal/30 bg-scope-personal/10 text-scope-personal',
+  organization: 'border-scope-organization/30 bg-scope-organization/10 text-scope-organization',
+  team: 'border-scope-team/30 bg-scope-team/10 text-scope-team',
+  project: 'border-scope-project/30 bg-scope-project/10 text-scope-project',
+  workspace: 'border-scope-workspace/30 bg-scope-workspace/10 text-scope-workspace',
+};
 
 /** Scope badge — colored by scope type, shows the scope name (or the type). */
 export function ScopeBadge({ type, name }: { type: ScopeType; name?: string }) {
   return (
-    <span className={`badge badge-scope-${type}`} title={`${type} scope`}>
+    <Badge className={SCOPE_CLASSES[type]} title={`${type} scope`}>
       {name ?? type}
-    </span>
+    </Badge>
   );
 }
 
@@ -13,40 +23,58 @@ export function ScopeBadge({ type, name }: { type: ScopeType; name?: string }) {
 export function KindBadge({ kind }: { kind: MemoryKind }) {
   if (kind === 'inferred') {
     return (
-      <span className="badge badge-kind-inferred" title="Inferred by a model">
+      <Badge variant="outline" className="text-muted-foreground" title="Inferred by a model">
         ≈ inferred
-      </span>
+      </Badge>
     );
   }
   return (
-    <span className="badge badge-kind-explicit" title="Explicitly remembered">
+    <Badge variant="secondary" title="Explicitly remembered">
       explicit
-    </span>
+    </Badge>
   );
 }
 
 export function SensitivityBadge({ sensitivity }: { sensitivity: Sensitivity }) {
   if (sensitivity === 'normal') return null;
   return (
-    <span className={`badge badge-sensitivity-${sensitivity}`} title="Sensitivity">
+    <Badge
+      variant={sensitivity === 'high' ? 'destructive' : 'secondary'}
+      className={sensitivity === 'low' ? 'text-muted-foreground' : undefined}
+      title="Sensitivity"
+    >
       {sensitivity === 'high' ? 'high sensitivity' : 'low sensitivity'}
-    </span>
+    </Badge>
   );
 }
 
 /** Small monospace chip for source apps and similar identifiers. */
-export function SourceChip({ app }: { app: string }) {
+export function SourceChip({ app, className }: { app: string; className?: string }) {
   return (
-    <span className="chip-mono" title="Source app">
+    <Badge variant="outline" className={cn('rounded-md font-mono text-muted-foreground', className)} title="Source app">
       {app}
-    </span>
+    </Badge>
   );
 }
 
+const ROLE_CLASSES: Record<OrgRole, string | undefined> = {
+  owner: 'border-scope-personal/30 bg-scope-personal/10 text-scope-personal',
+  admin: 'border-scope-organization/30 bg-scope-organization/10 text-scope-organization',
+  member: undefined,
+};
+
 export function RoleBadge({ role }: { role: OrgRole }) {
-  return <span className={`badge badge-role-${role}`}>{role}</span>;
+  return (
+    <Badge variant={role === 'member' ? 'secondary' : 'default'} className={ROLE_CLASSES[role]}>
+      {role}
+    </Badge>
+  );
 }
 
 export function Tag({ tag }: { tag: string }) {
-  return <span className="tag">#{tag}</span>;
+  return (
+    <Badge variant="secondary" className="rounded-md text-muted-foreground">
+      #{tag}
+    </Badge>
+  );
 }

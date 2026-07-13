@@ -8,10 +8,10 @@ import {
   listMemories,
   searchMemories,
   updateMemory,
-} from '../../core/memories.js';
-import { parse } from '../../lib/validate.js';
-import type { AppContext } from '../../types.js';
-import { requireAuth } from '../authn.js';
+} from '@/core/memories';
+import { parse } from '@/lib/validate';
+import type { AppContext } from '@/types';
+import { requireAuth } from '@/http/authn';
 
 const listQuerySchema = z.object({
   scopeId: z.string().uuid().optional(),

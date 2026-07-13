@@ -1,9 +1,9 @@
-import { loadConfig, VERSION } from './config.js';
-import { sweepMemories } from './core/memories.js';
-import { createPool, migrate, type Db } from './db.js';
-import { createEmbeddingProvider } from './lib/embeddings.js';
-import { buildApp } from './http/app.js';
-import type { AppContext } from './types.js';
+import { loadConfig, VERSION } from './config';
+import { sweepMemories } from './core/memories';
+import { createPool, migrate, type Db } from './db';
+import { createEmbeddingProvider } from './lib/embeddings';
+import { buildApp } from './http/app';
+import type { AppContext } from './types';
 
 const SWEEP_INTERVAL_MS = 60 * 60 * 1000;
 

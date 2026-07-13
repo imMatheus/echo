@@ -2,8 +2,8 @@ import type { ReactNode } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider, useAuth } from './auth';
 import { Layout } from './components/Layout';
-import { Spinner } from './components/Spinner';
-import { ToastProvider } from './components/Toast';
+import { Spinner } from '@/components/ui/spinner';
+import { Toaster } from '@/components/ui/sonner';
 import ApiKeysPage from './pages/ApiKeys';
 import AuditPage from './pages/Audit';
 import ConnectPage from './pages/Connect';
@@ -18,8 +18,8 @@ function RequireAuth({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
   if (loading) {
     return (
-      <div className="page-center">
-        <Spinner size={28} />
+      <div className="flex min-h-screen items-center justify-center">
+        <Spinner className="size-7" />
       </div>
     );
   }
@@ -31,28 +31,27 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <ToastProvider>
-          <Routes>
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/signup" element={<SignupPage />} />
-            <Route
-              element={
-                <RequireAuth>
-                  <Layout />
-                </RequireAuth>
-              }
-            >
-              <Route path="/" element={<MemoriesPage />} />
-              <Route path="/memories/:id" element={<MemoryDetailPage />} />
-              <Route path="/keys" element={<ApiKeysPage />} />
-              <Route path="/audit" element={<AuditPage />} />
-              <Route path="/orgs" element={<OrgsPage />} />
-              <Route path="/orgs/:id" element={<OrgDetailPage />} />
-              <Route path="/connect" element={<ConnectPage />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Route>
-          </Routes>
-        </ToastProvider>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/signup" element={<SignupPage />} />
+          <Route
+            element={
+              <RequireAuth>
+                <Layout />
+              </RequireAuth>
+            }
+          >
+            <Route path="/" element={<MemoriesPage />} />
+            <Route path="/memories/:id" element={<MemoryDetailPage />} />
+            <Route path="/keys" element={<ApiKeysPage />} />
+            <Route path="/audit" element={<AuditPage />} />
+            <Route path="/orgs" element={<OrgsPage />} />
+            <Route path="/orgs/:id" element={<OrgDetailPage />} />
+            <Route path="/connect" element={<ConnectPage />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Route>
+        </Routes>
+        <Toaster position="bottom-right" />
       </AuthProvider>
     </BrowserRouter>
   );

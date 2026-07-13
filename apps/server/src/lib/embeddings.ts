@@ -1,4 +1,4 @@
-import type { Config } from '../config.js';
+import type { Config } from '@/config';
 
 export interface EmbeddingProvider {
   /** Stored on each memory as provenance, e.g. "openai:text-embedding-3-small". */

@@ -1,14 +1,9 @@
+import { Building2Icon, KeyRoundIcon, LayersIcon, LogOutIcon, ScrollTextIcon, ZapIcon } from 'lucide-react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth';
-import {
-  IconAudit,
-  IconConnect,
-  IconKey,
-  IconLogout,
-  IconMemories,
-  IconOrgs,
-  LogoMark,
-} from './icons';
+import { LogoMark } from './icons';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -19,11 +14,11 @@ function initials(name: string): string {
 }
 
 const NAV_ITEMS = [
-  { to: '/', label: 'Memories', icon: <IconMemories />, end: true },
-  { to: '/keys', label: 'API Keys', icon: <IconKey />, end: false },
-  { to: '/audit', label: 'Audit Log', icon: <IconAudit />, end: false },
-  { to: '/orgs', label: 'Organizations', icon: <IconOrgs />, end: false },
-  { to: '/connect', label: 'Connect', icon: <IconConnect />, end: false },
+  { to: '/', label: 'Memories', icon: <LayersIcon />, end: true },
+  { to: '/keys', label: 'API Keys', icon: <KeyRoundIcon />, end: false },
+  { to: '/audit', label: 'Audit Log', icon: <ScrollTextIcon />, end: false },
+  { to: '/orgs', label: 'Organizations', icon: <Building2Icon />, end: false },
+  { to: '/connect', label: 'Connect', icon: <ZapIcon />, end: false },
 ];
 
 export function Layout() {
@@ -36,40 +31,49 @@ export function Layout() {
   };
 
   return (
-    <div className="app-shell">
-      <aside className="sidebar">
-        <div className="sidebar-logo">
+    <div className="flex min-h-screen">
+      <aside className="fixed inset-y-0 left-0 z-10 flex w-60 flex-col border-r border-sidebar-border bg-sidebar p-3 pt-4 text-sidebar-foreground">
+        <div className="flex items-center gap-2.5 px-2.5 pb-4">
           <LogoMark />
-          <span className="wordmark">Echo</span>
+          <span className="font-heading text-[17px] font-bold tracking-tight">Echo</span>
         </div>
-        <nav className="nav">
+        <nav className="flex flex-col gap-0.5">
           {NAV_ITEMS.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
               end={item.end}
-              className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}
+              className={({ isActive }) =>
+                cn(
+                  'flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-xs/relaxed font-medium transition-colors [&_svg]:size-3.5 [&_svg]:shrink-0',
+                  isActive
+                    ? 'bg-sidebar-accent text-sidebar-accent-foreground [&_svg]:text-sidebar-primary'
+                    : 'text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground',
+                )
+              }
             >
-              <span className="nav-icon">{item.icon}</span>
+              {item.icon}
               {item.label}
             </NavLink>
           ))}
         </nav>
-        <div className="sidebar-footer">
-          <div className="user-chip">
-            <span className="avatar">{user ? initials(user.name) : '?'}</span>
-            <div className="user-chip-text">
-              <div className="name">{user?.name}</div>
-              <div className="email">{user?.email}</div>
+        <div className="mt-auto flex items-center gap-2 border-t border-sidebar-border pt-2.5">
+          <div className="flex min-w-0 flex-1 items-center gap-2.5 rounded-md px-2 py-1.5">
+            <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-sidebar-primary/15 text-[11px] font-bold text-scope-personal">
+              {user ? initials(user.name) : '?'}
+            </span>
+            <div className="min-w-0">
+              <div className="truncate text-xs font-semibold">{user?.name}</div>
+              <div className="truncate text-[11px] text-muted-foreground">{user?.email}</div>
             </div>
           </div>
-          <button type="button" className="icon-btn" onClick={() => void onLogout()} title="Log out" aria-label="Log out">
-            <IconLogout />
-          </button>
+          <Button variant="ghost" size="icon" onClick={() => void onLogout()} title="Log out" aria-label="Log out">
+            <LogOutIcon />
+          </Button>
         </div>
       </aside>
-      <main className="main">
-        <div className="main-inner">
+      <main className="ml-60 min-w-0 flex-1 px-10 pb-16 pt-8 max-md:px-5">
+        <div className="mx-auto max-w-[960px]">
           <Outlet />
         </div>
       </main>

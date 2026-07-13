@@ -1,5 +1,5 @@
 import type { AuditEntry, AuditListResponse } from '@echo/shared';
-import type { AppContext } from '../types.js';
+import type { AppContext } from '@/types';
 
 export interface AuditEvent {
   action: string;

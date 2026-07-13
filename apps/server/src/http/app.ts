@@ -5,20 +5,20 @@ import fastifyCookie from '@fastify/cookie';
 import fastifyRateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
 import Fastify, { type FastifyInstance } from 'fastify';
-import { HttpError } from '../lib/http-error.js';
-import { mcpRoutes } from '../mcp/route.js';
-import type { AppContext } from '../types.js';
-import { apiKeyRoutes } from './routes/apikeys.js';
-import { authRoutes } from './routes/auth.js';
-import { memoryRoutes } from './routes/memories.js';
-import { miscRoutes } from './routes/misc.js';
-import { orgRoutes } from './routes/orgs.js';
-import { scopeRoutes } from './routes/scopes.js';
+import { HttpError } from '@/lib/http-error';
+import { mcpRoutes } from '@/mcp/route';
+import type { AppContext } from '@/types';
+import { apiKeyRoutes } from './routes/apikeys';
+import { authRoutes } from './routes/auth';
+import { memoryRoutes } from './routes/memories';
+import { miscRoutes } from './routes/misc';
+import { orgRoutes } from './routes/orgs';
+import { scopeRoutes } from './routes/scopes';
 
 function resolveStaticDir(app: AppContext): string | null {
   const candidates = [
     app.config.STATIC_DIR,
-    join(dirname(fileURLToPath(import.meta.url)), '../../../web/dist'), // dist/http → apps/web/dist
+    join(dirname(fileURLToPath(import.meta.url)), '../../../web/dist'), // src/http → apps/web/dist
     join(dirname(fileURLToPath(import.meta.url)), '../../web/dist'),
   ].filter((p): p is string => Boolean(p));
   for (const dir of candidates) {

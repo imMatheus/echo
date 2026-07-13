@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
+import { Building2Icon, PlusIcon } from 'lucide-react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { toast } from 'sonner';
 import type {
   OrgMember,
   OrgRole,
@@ -10,27 +12,60 @@ import type {
   ScopeWithAccess,
 } from '@echo/shared';
 import { ORG_SCOPE_TYPES } from '@echo/shared';
-import type { AuditQuery } from '../api';
-import * as api from '../api';
-import { ApiRequestError, errorMessage } from '../api';
-import { AuditTable } from '../components/AuditTable';
-import { RoleBadge, ScopeBadge } from '../components/Badge';
-import { ConfirmDialog } from '../components/ConfirmDialog';
-import { EmptyState } from '../components/EmptyState';
-import { MemoryBrowser } from '../components/MemoryBrowser';
-import { Modal } from '../components/Modal';
-import { RelativeTime } from '../components/RelativeTime';
-import { PageLoading, Spinner } from '../components/Spinner';
-import { useToast } from '../components/Toast';
-import { EmptyOrgIcon, IconPlus } from '../components/icons';
+import type { AuditQuery } from '@/api';
+import * as api from '@/api';
+import { ApiRequestError, errorMessage } from '@/api';
+import { AuditTable } from '@/components/AuditTable';
+import { RoleBadge, ScopeBadge } from '@/components/Badge';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { EmptyState } from '@/components/EmptyState';
+import { MemoryBrowser } from '@/components/MemoryBrowser';
+import { PageHeader } from '@/components/PageHeader';
+import { PageLoading } from '@/components/PageLoading';
+import { RelativeTime } from '@/components/RelativeTime';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Button, buttonVariants } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Spinner } from '@/components/ui/spinner';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { cn } from '@/lib/utils';
 
 const TABS = ['memories', 'members', 'scopes', 'audit', 'settings'] as const;
 type Tab = (typeof TABS)[number];
 
+const ROLE_ITEMS = [
+  { value: 'member', label: 'member' },
+  { value: 'admin', label: 'admin' },
+  { value: 'owner', label: 'owner' },
+];
+
 export default function OrgDetailPage() {
   const { id } = useParams<{ id: string }>();
   const orgId = id ?? '';
-  const toast = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const rawTab = searchParams.get('tab');
@@ -47,7 +82,7 @@ export default function OrgDetailPage() {
       .listScopes()
       .then((res) => setScopes(res.scopes.filter((s) => s.orgId === orgId)))
       .catch((err) => toast.error(errorMessage(err)));
-  }, [orgId, toast]);
+  }, [orgId]);
 
   useEffect(() => {
     if (!orgId) return;
@@ -71,18 +106,18 @@ export default function OrgDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [orgId, toast]);
+  }, [orgId]);
 
   if (loading) return <PageLoading />;
 
   if (notFound || !org) {
     return (
       <EmptyState
-        icon={<EmptyOrgIcon />}
+        icon={<Building2Icon />}
         title="Organization not found"
         description="It may have been deleted, or you are not a member."
         action={
-          <Link to="/orgs" className="btn">
+          <Link to="/orgs" className={cn(buttonVariants({ variant: 'outline' }))}>
             Back to organizations
           </Link>
         }
@@ -94,38 +129,37 @@ export default function OrgDetailPage() {
 
   return (
     <div>
-      <div className="page-header">
-        <div>
-          <div className="row" style={{ marginBottom: 6 }}>
-            <Link to="/orgs" className="muted small">
-              ← Organizations
-            </Link>
-          </div>
-          <div className="row">
-            <h1>{org.name}</h1>
-            <RoleBadge role={role} />
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        title={org.name}
+        titleExtra={<RoleBadge role={role} />}
+        backLink={
+          <Link to="/orgs" className="text-xs text-muted-foreground hover:text-foreground">
+            ← Organizations
+          </Link>
+        }
+      />
 
-      <div className="tabs">
-        {TABS.map((t) => (
-          <button
-            key={t}
-            type="button"
-            className={`tab${tab === t ? ' active' : ''}`}
-            onClick={() => setSearchParams(t === 'memories' ? {} : { tab: t })}
-          >
-            {t.charAt(0).toUpperCase() + t.slice(1)}
-          </button>
-        ))}
-      </div>
+      <Tabs
+        value={tab}
+        onValueChange={(value) => setSearchParams(value === 'memories' ? {} : { tab: value as string })}
+        className="mb-5"
+      >
+        <TabsList>
+          {TABS.map((t) => (
+            <TabsTrigger key={t} value={t}>
+              {t.charAt(0).toUpperCase() + t.slice(1)}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
 
       {tab === 'memories' &&
         (scopes === null ? (
           <PageLoading />
         ) : scopes.length === 0 ? (
-          <div className="inline-note">This organization has no scopes you can access.</div>
+          <Alert>
+            <AlertTitle>This organization has no scopes you can access.</AlertTitle>
+          </Alert>
         ) : (
           <MemoryBrowser
             key={orgId}
@@ -145,7 +179,9 @@ export default function OrgDetailPage() {
         (isAdmin ? (
           <OrgAudit orgId={orgId} />
         ) : (
-          <div className="inline-note">Only organization admins and owners can view the audit log.</div>
+          <Alert>
+            <AlertTitle>Only organization admins and owners can view the audit log.</AlertTitle>
+          </Alert>
         ))}
 
       {tab === 'settings' && (
@@ -160,7 +196,6 @@ export default function OrgDetailPage() {
 // ---------------------------------------------------------------------------
 
 function MembersTab({ orgId, myRole }: { orgId: string; myRole: OrgRole }) {
-  const toast = useToast();
   const [members, setMembers] = useState<OrgMember[] | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<OrgMember | null>(null);
@@ -172,7 +207,7 @@ function MembersTab({ orgId, myRole }: { orgId: string; myRole: OrgRole }) {
       .listOrgMembers(orgId)
       .then((res) => setMembers(res.members))
       .catch((err) => toast.error(errorMessage(err)));
-  }, [orgId, toast]);
+  }, [orgId]);
 
   useEffect(() => {
     load();
@@ -206,62 +241,72 @@ function MembersTab({ orgId, myRole }: { orgId: string; myRole: OrgRole }) {
   return (
     <div>
       {isAdmin && (
-        <div className="row" style={{ justifyContent: 'flex-end', marginBottom: 14 }}>
-          <button type="button" className="btn btn-primary" onClick={() => setShowAdd(true)}>
-            <IconPlus />
+        <div className="mb-3.5 flex justify-end">
+          <Button onClick={() => setShowAdd(true)}>
+            <PlusIcon data-icon="inline-start" />
             Add member
-          </button>
+          </Button>
         </div>
       )}
 
-      <div className="table-wrap">
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Email</th>
-              <th>Role</th>
-              <th>Joined</th>
-              {isAdmin && <th />}
-            </tr>
-          </thead>
-          <tbody>
-            {members.map((member) => (
-              <tr key={member.userId}>
-                <td style={{ fontWeight: 600 }}>{member.name}</td>
-                <td className="muted">{member.email}</td>
-                <td>
-                  {isAdmin ? (
-                    <select
-                      className="select"
-                      style={{ width: 'auto', padding: '3px 26px 3px 8px', fontSize: 12.5 }}
-                      value={member.role}
-                      onChange={(e) => void changeRole(member, e.target.value as OrgRole)}
-                      aria-label={`Role for ${member.name}`}
-                    >
-                      <option value="member">member</option>
-                      <option value="admin">admin</option>
-                      {/* only owners can grant/revoke owner */}
-                      {(myRole === 'owner' || member.role === 'owner') && <option value="owner">owner</option>}
-                    </select>
-                  ) : (
-                    <RoleBadge role={member.role} />
+      <div className="overflow-x-auto rounded-xl border bg-card">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Name</TableHead>
+              <TableHead>Email</TableHead>
+              <TableHead>Role</TableHead>
+              <TableHead>Joined</TableHead>
+              {isAdmin && <TableHead />}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {members.map((member) => {
+              // only owners can grant/revoke owner
+              const roleItems = ROLE_ITEMS.filter(
+                (item) => item.value !== 'owner' || myRole === 'owner' || member.role === 'owner',
+              );
+              return (
+                <TableRow key={member.userId}>
+                  <TableCell className="font-semibold">{member.name}</TableCell>
+                  <TableCell className="text-muted-foreground">{member.email}</TableCell>
+                  <TableCell>
+                    {isAdmin ? (
+                      <Select
+                        items={roleItems}
+                        value={member.role}
+                        onValueChange={(v) => void changeRole(member, v as OrgRole)}
+                      >
+                        <SelectTrigger size="sm" aria-label={`Role for ${member.name}`}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {roleItems.map((item) => (
+                            <SelectItem key={item.value} value={item.value}>
+                              {item.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <RoleBadge role={member.role} />
+                    )}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    <RelativeTime date={member.joinedAt} />
+                  </TableCell>
+                  {isAdmin && (
+                    <TableCell className="text-right">
+                      <Button variant="destructive" size="sm" onClick={() => setRemoveTarget(member)}>
+                        Remove
+                      </Button>
+                    </TableCell>
                   )}
-                </td>
-                <td className="muted">
-                  <RelativeTime date={member.joinedAt} />
-                </td>
-                {isAdmin && (
-                  <td style={{ textAlign: 'right' }}>
-                    <button type="button" className="btn btn-danger btn-sm" onClick={() => setRemoveTarget(member)}>
-                      Remove
-                    </button>
-                  </td>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
       </div>
 
       {showAdd && (
@@ -309,6 +354,8 @@ function AddMemberModal({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const roleItems = ROLE_ITEMS.filter((item) => item.value !== 'owner' || myRole === 'owner');
+
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -328,42 +375,59 @@ function AddMemberModal({
   };
 
   return (
-    <Modal title="Add member" onClose={onClose}>
-      <form onSubmit={(e) => void submit(e)}>
-        {error && <div className="form-error">{error}</div>}
-        <div className="field">
-          <label htmlFor="member-email">Email</label>
-          <input
-            id="member-email"
-            className="input"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="teammate@company.com"
-            autoFocus
-            required
-          />
-          <div className="hint">They must already have an account on this Echo server.</div>
-        </div>
-        <div className="field">
-          <label htmlFor="member-role">Role</label>
-          <select id="member-role" className="select" value={role} onChange={(e) => setRole(e.target.value as OrgRole)}>
-            <option value="member">member</option>
-            <option value="admin">admin</option>
-            {myRole === 'owner' && <option value="owner">owner</option>}
-          </select>
-        </div>
-        <div className="modal-footer" style={{ padding: '14px 0 0', borderTop: '1px solid var(--border)' }}>
-          <button type="button" className="btn" onClick={onClose} disabled={pending}>
-            Cancel
-          </button>
-          <button type="submit" className="btn btn-primary" disabled={pending}>
-            {pending && <Spinner size={13} />}
-            Add member
-          </button>
-        </div>
-      </form>
-    </Modal>
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Add member</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={(e) => void submit(e)}>
+          <FieldGroup>
+            {error && (
+              <Alert variant="destructive">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+            <Field>
+              <FieldLabel htmlFor="member-email">Email</FieldLabel>
+              <Input
+                id="member-email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="teammate@company.com"
+                autoFocus
+                required
+              />
+              <FieldDescription>They must already have an account on this Echo server.</FieldDescription>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="member-role">Role</FieldLabel>
+              <Select items={roleItems} value={role} onValueChange={(v) => setRole(v as OrgRole)}>
+                <SelectTrigger id="member-role" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {roleItems.map((item) => (
+                    <SelectItem key={item.value} value={item.value}>
+                      {item.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+          </FieldGroup>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" type="button" onClick={onClose} disabled={pending}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={pending}>
+              {pending && <Spinner />}
+              Add member
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -382,7 +446,6 @@ function ScopesTab({
   isAdmin: boolean;
   onChanged: () => void;
 }) {
-  const toast = useToast();
   const [showCreate, setShowCreate] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ScopeWithAccess | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -404,56 +467,58 @@ function ScopesTab({
   return (
     <div>
       {isAdmin && (
-        <div className="row" style={{ justifyContent: 'flex-end', marginBottom: 14 }}>
-          <button type="button" className="btn btn-primary" onClick={() => setShowCreate(true)}>
-            <IconPlus />
+        <div className="mb-3.5 flex justify-end">
+          <Button onClick={() => setShowCreate(true)}>
+            <PlusIcon data-icon="inline-start" />
             New scope
-          </button>
+          </Button>
         </div>
       )}
 
       {subScopes.length === 0 ? (
         <EmptyState
-          icon={<EmptyOrgIcon />}
+          icon={<Building2Icon />}
           title="No workspace, team, or project scopes"
           description="Scopes carve the organization into smaller shared-memory spaces with their own membership."
           action={
             isAdmin ? (
-              <button type="button" className="btn btn-primary" onClick={() => setShowCreate(true)}>
-                <IconPlus />
+              <Button onClick={() => setShowCreate(true)}>
+                <PlusIcon data-icon="inline-start" />
                 New scope
-              </button>
+              </Button>
             ) : undefined
           }
         />
       ) : (
-        <div>
+        <div className="flex flex-col gap-2.5">
           {subScopes.map((scope) => (
-            <div key={scope.id} className="scope-card">
-              <div className="scope-card-head">
-                <ScopeBadge type={scope.type} />
-                <strong>{scope.name}</strong>
-                <span className="muted small">
-                  {scope.memoryCount} memor{scope.memoryCount === 1 ? 'y' : 'ies'}
-                </span>
-                <span className="spacer" />
-                {isAdmin && (
-                  <>
-                    <button
-                      type="button"
-                      className="btn btn-sm"
-                      onClick={() => setExpandedId(expandedId === scope.id ? null : scope.id)}
-                    >
-                      {expandedId === scope.id ? 'Hide members' : 'Members'}
-                    </button>
-                    <button type="button" className="btn btn-danger btn-sm" onClick={() => setDeleteTarget(scope)}>
-                      Delete
-                    </button>
-                  </>
-                )}
-              </div>
-              {isAdmin && expandedId === scope.id && <ScopeMembers scopeId={scope.id} />}
-            </div>
+            <Card key={scope.id} size="sm">
+              <CardContent>
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <ScopeBadge type={scope.type} />
+                  <strong className="text-xs font-semibold">{scope.name}</strong>
+                  <span className="text-xs text-muted-foreground">
+                    {scope.memoryCount} memor{scope.memoryCount === 1 ? 'y' : 'ies'}
+                  </span>
+                  <span className="flex-1" />
+                  {isAdmin && (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setExpandedId(expandedId === scope.id ? null : scope.id)}
+                      >
+                        {expandedId === scope.id ? 'Hide members' : 'Members'}
+                      </Button>
+                      <Button variant="destructive" size="sm" onClick={() => setDeleteTarget(scope)}>
+                        Delete
+                      </Button>
+                    </>
+                  )}
+                </div>
+                {isAdmin && expandedId === scope.id && <ScopeMembers scopeId={scope.id} />}
+              </CardContent>
+            </Card>
           ))}
         </div>
       )}
@@ -492,7 +557,6 @@ function ScopesTab({
 }
 
 function ScopeMembers({ scopeId }: { scopeId: string }) {
-  const toast = useToast();
   const [members, setMembers] = useState<ScopeMember[] | null>(null);
   const [email, setEmail] = useState('');
   const [pending, setPending] = useState(false);
@@ -503,7 +567,7 @@ function ScopeMembers({ scopeId }: { scopeId: string }) {
       .listScopeMembers(scopeId)
       .then((res) => setMembers(res.members))
       .catch((err) => toast.error(errorMessage(err)));
-  }, [scopeId, toast]);
+  }, [scopeId]);
 
   useEffect(() => {
     load();
@@ -541,44 +605,43 @@ function ScopeMembers({ scopeId }: { scopeId: string }) {
   };
 
   return (
-    <div className="scope-members">
+    <div className="mt-3 border-t pt-3">
       {members === null ? (
-        <Spinner size={16} />
+        <Spinner />
       ) : (
         <>
-          {members.length === 0 && <div className="muted small">No members yet.</div>}
+          {members.length === 0 && <div className="text-xs text-muted-foreground">No members yet.</div>}
           {members.map((member) => (
-            <div key={member.userId} className="scope-member-row">
-              <strong>{member.name}</strong>
-              <span className="muted">{member.email}</span>
-              <span className="muted small">
+            <div key={member.userId} className="flex items-center gap-2.5 py-1.5 text-xs/relaxed">
+              <strong className="font-semibold">{member.name}</strong>
+              <span className="text-muted-foreground">{member.email}</span>
+              <span className="text-muted-foreground">
                 added <RelativeTime date={member.addedAt} />
               </span>
-              <span className="spacer" />
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => void remove(member)}>
+              <span className="flex-1" />
+              <Button variant="ghost" size="sm" onClick={() => void remove(member)}>
                 Remove
-              </button>
+              </Button>
             </div>
           ))}
         </>
       )}
-      <form className="row" style={{ marginTop: 10 }} onSubmit={(e) => void add(e)}>
-        <input
-          className="input"
+      <form className="mt-2.5 flex items-center gap-2" onSubmit={(e) => void add(e)}>
+        <Input
+          className="max-w-70"
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="Add org member by email"
-          style={{ maxWidth: 280 }}
         />
-        <button type="submit" className="btn btn-sm" disabled={pending || !email.trim()}>
-          {pending ? <Spinner size={12} /> : 'Add'}
-        </button>
+        <Button variant="outline" size="sm" type="submit" disabled={pending || !email.trim()}>
+          {pending ? <Spinner /> : 'Add'}
+        </Button>
       </form>
       {error && (
-        <div className="form-error" style={{ marginTop: 10, marginBottom: 0 }}>
-          {error}
-        </div>
+        <Alert variant="destructive" className="mt-2.5">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
     </div>
   );
@@ -595,6 +658,8 @@ function CreateScopeModal({
   const [name, setName] = useState('');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const typeItems = ORG_SCOPE_TYPES.map((t) => ({ value: t, label: t }));
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -613,47 +678,57 @@ function CreateScopeModal({
   };
 
   return (
-    <Modal title="New scope" onClose={onClose}>
-      <form onSubmit={(e) => void submit(e)}>
-        {error && <div className="form-error">{error}</div>}
-        <div className="field">
-          <label htmlFor="scope-type">Type</label>
-          <select
-            id="scope-type"
-            className="select"
-            value={type}
-            onChange={(e) => setType(e.target.value as OrgScopeType)}
-          >
-            {ORG_SCOPE_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="field">
-          <label htmlFor="scope-name">Name</label>
-          <input
-            id="scope-name"
-            className="input"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Platform Team"
-            autoFocus
-            required
-          />
-        </div>
-        <div className="modal-footer" style={{ padding: '14px 0 0', borderTop: '1px solid var(--border)' }}>
-          <button type="button" className="btn" onClick={onClose} disabled={pending}>
-            Cancel
-          </button>
-          <button type="submit" className="btn btn-primary" disabled={pending}>
-            {pending && <Spinner size={13} />}
-            Create scope
-          </button>
-        </div>
-      </form>
-    </Modal>
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>New scope</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={(e) => void submit(e)}>
+          <FieldGroup>
+            {error && (
+              <Alert variant="destructive">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+            <Field>
+              <FieldLabel htmlFor="scope-type">Type</FieldLabel>
+              <Select items={typeItems} value={type} onValueChange={(v) => setType(v as OrgScopeType)}>
+                <SelectTrigger id="scope-type" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {typeItems.map((item) => (
+                    <SelectItem key={item.value} value={item.value}>
+                      {item.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="scope-name">Name</FieldLabel>
+              <Input
+                id="scope-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g. Platform Team"
+                autoFocus
+                required
+              />
+            </Field>
+          </FieldGroup>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" type="button" onClick={onClose} disabled={pending}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={pending}>
+              {pending && <Spinner />}
+              Create scope
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -675,7 +750,6 @@ function SettingsTab({
   isAdmin: boolean;
   onRenamed: (org: Organization) => void;
 }) {
-  const toast = useToast();
   const [name, setName] = useState(org.name);
   const [pending, setPending] = useState(false);
 
@@ -695,44 +769,56 @@ function SettingsTab({
   };
 
   return (
-    <div className="card" style={{ maxWidth: 480 }}>
-      <div className="card-title-row">
-        <h2>Organization settings</h2>
-      </div>
-      {isAdmin ? (
-        <form onSubmit={(e) => void submit(e)}>
-          <div className="field">
-            <label htmlFor="org-rename">Name</label>
-            <input id="org-rename" className="input" value={name} onChange={(e) => setName(e.target.value)} required />
-          </div>
-          <div className="field">
-            <label>Slug</label>
-            <div className="mono muted">{org.slug}</div>
-          </div>
-          <div className="field">
-            <label>Created</label>
-            <div>
-              <RelativeTime date={org.createdAt} />
-            </div>
-          </div>
-          <button type="submit" className="btn btn-primary" disabled={pending || !name.trim() || name.trim() === org.name}>
-            {pending && <Spinner size={13} />}
-            Save changes
-          </button>
-        </form>
-      ) : (
-        <div>
-          <div className="field">
-            <label>Name</label>
-            <div>{org.name}</div>
-          </div>
-          <div className="field">
-            <label>Slug</label>
-            <div className="mono muted">{org.slug}</div>
-          </div>
-          <div className="inline-note">Only organization admins and owners can change settings.</div>
-        </div>
-      )}
-    </div>
+    <Card className="max-w-120">
+      <CardHeader>
+        <CardTitle>Organization settings</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {isAdmin ? (
+          <form onSubmit={(e) => void submit(e)}>
+            <FieldGroup>
+              <Field>
+                <FieldLabel htmlFor="org-rename">Name</FieldLabel>
+                <Input id="org-rename" value={name} onChange={(e) => setName(e.target.value)} required />
+              </Field>
+              <Field>
+                <FieldLabel>Slug</FieldLabel>
+                <div className="font-mono text-xs text-muted-foreground">{org.slug}</div>
+              </Field>
+              <Field>
+                <FieldLabel>Created</FieldLabel>
+                <div className="text-xs/relaxed">
+                  <RelativeTime date={org.createdAt} />
+                </div>
+              </Field>
+              <Field>
+                <Button
+                  type="submit"
+                  className="w-fit"
+                  disabled={pending || !name.trim() || name.trim() === org.name}
+                >
+                  {pending && <Spinner />}
+                  Save changes
+                </Button>
+              </Field>
+            </FieldGroup>
+          </form>
+        ) : (
+          <FieldGroup>
+            <Field>
+              <FieldLabel>Name</FieldLabel>
+              <div className="text-xs/relaxed">{org.name}</div>
+            </Field>
+            <Field>
+              <FieldLabel>Slug</FieldLabel>
+              <div className="font-mono text-xs text-muted-foreground">{org.slug}</div>
+            </Field>
+            <Alert>
+              <AlertTitle>Only organization admins and owners can change settings.</AlertTitle>
+            </Alert>
+          </FieldGroup>
+        )}
+      </CardContent>
+    </Card>
   );
 }

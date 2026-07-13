@@ -1,8 +1,8 @@
 import type { ApiKeyInfo, CreateApiKeyResponse } from '@echo/shared';
-import { generateApiKey, sha256Hex } from '../lib/crypto.js';
-import { notFound } from '../lib/http-error.js';
-import type { AppContext, AuthContext } from '../types.js';
-import { logAudit } from './audit.js';
+import { generateApiKey, sha256Hex } from '@/lib/crypto';
+import { notFound } from '@/lib/http-error';
+import type { AppContext, AuthContext } from '@/types';
+import { logAudit } from './audit';
 
 function mapKey(row: any): ApiKeyInfo {
   return {

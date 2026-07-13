@@ -1,7 +1,16 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
-import { Modal } from './Modal';
-import { Spinner } from './Spinner';
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Button } from '@/components/ui/button';
+import { Spinner } from '@/components/ui/spinner';
 
 export function ConfirmDialog({
   title,
@@ -31,25 +40,25 @@ export function ConfirmDialog({
   };
 
   return (
-    <Modal
-      title={title}
-      onClose={() => {
-        if (!busy) onClose();
+    <AlertDialog
+      open
+      onOpenChange={(open) => {
+        if (!open && !busy) onClose();
       }}
-      width={420}
-      footer={
-        <>
-          <button type="button" className="btn" onClick={onClose} disabled={busy}>
-            Cancel
-          </button>
-          <button type="button" className="btn btn-danger-solid" onClick={() => void confirm()} disabled={busy}>
-            {busy && <Spinner size={13} />}
-            {confirmLabel}
-          </button>
-        </>
-      }
     >
-      <div style={{ fontSize: 13.5, lineHeight: 1.6 }}>{message}</div>
-    </Modal>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{title}</AlertDialogTitle>
+          <AlertDialogDescription>{message}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+          <Button variant="destructive" onClick={() => void confirm()} disabled={busy}>
+            {busy && <Spinner />}
+            {confirmLabel}
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

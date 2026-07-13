@@ -8,11 +8,11 @@ import type {
   SearchMemoriesResponse,
   UpdateMemoryRequest,
 } from '@echo/shared';
-import { toVectorLiteral } from '../lib/embeddings.js';
-import { forbidden, notFound } from '../lib/http-error.js';
-import type { AppContext, AuthContext } from '../types.js';
-import { getAccessibleScopes, getScopeAccess, type ScopeAccess } from './access.js';
-import { logAudit } from './audit.js';
+import { toVectorLiteral } from '@/lib/embeddings';
+import { forbidden, notFound } from '@/lib/http-error';
+import type { AppContext, AuthContext } from '@/types';
+import { getAccessibleScopes, getScopeAccess, type ScopeAccess } from './access';
+import { logAudit } from './audit';
 
 const MEMORY_COLS = `
   m.id, m.scope_id, m.content, m.kind, m.confidence, m.sensitivity, m.source_app,

@@ -1,18 +1,18 @@
 import { ORG_SCOPE_TYPES } from '@echo/shared';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { getAccessibleScopes, getScopeAccess, toScopeWithAccess } from '../../core/access.js';
+import { getAccessibleScopes, getScopeAccess, toScopeWithAccess } from '@/core/access';
 import {
   addScopeMember,
   createOrgScope,
   deleteOrgScope,
   listScopeMembers,
   removeScopeMember,
-} from '../../core/orgs.js';
-import { notFound } from '../../lib/http-error.js';
-import { parse } from '../../lib/validate.js';
-import type { AppContext } from '../../types.js';
-import { requireAuth } from '../authn.js';
+} from '@/core/orgs';
+import { notFound } from '@/lib/http-error';
+import { parse } from '@/lib/validate';
+import type { AppContext } from '@/types';
+import { requireAuth } from '@/http/authn';
 
 const createSchema = z.object({
   orgId: z.string().uuid(),

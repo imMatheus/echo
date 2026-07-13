@@ -1,7 +1,7 @@
 import { ORG_ROLES } from '@echo/shared';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { listOrgAudit } from '../../core/audit.js';
+import { listOrgAudit } from '@/core/audit';
 import {
   addOrgMember,
   createOrg,
@@ -12,10 +12,10 @@ import {
   renameOrg,
   requireOrgRole,
   updateOrgMemberRole,
-} from '../../core/orgs.js';
-import { parse } from '../../lib/validate.js';
-import type { AppContext } from '../../types.js';
-import { requireAuth } from '../authn.js';
+} from '@/core/orgs';
+import { parse } from '@/lib/validate';
+import type { AppContext } from '@/types';
+import { requireAuth } from '@/http/authn';
 
 const createSchema = z.object({
   name: z.string().min(1).max(100),

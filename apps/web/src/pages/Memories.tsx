@@ -1,14 +1,13 @@
 import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import type { ScopeWithAccess } from '@echo/shared';
-import * as api from '../api';
-import { errorMessage } from '../api';
-import { useAuth } from '../auth';
-import { MemoryBrowser } from '../components/MemoryBrowser';
-import { PageLoading } from '../components/Spinner';
-import { useToast } from '../components/Toast';
+import * as api from '@/api';
+import { errorMessage } from '@/api';
+import { useAuth } from '@/auth';
+import { MemoryBrowser } from '@/components/MemoryBrowser';
+import { PageLoading } from '@/components/PageLoading';
 
 export default function MemoriesPage() {
-  const toast = useToast();
   const { personalScopeId } = useAuth();
   const [scopes, setScopes] = useState<ScopeWithAccess[] | null>(null);
 
@@ -25,7 +24,7 @@ export default function MemoriesPage() {
     return () => {
       cancelled = true;
     };
-  }, [toast]);
+  }, []);
 
   if (scopes === null) return <PageLoading />;
 

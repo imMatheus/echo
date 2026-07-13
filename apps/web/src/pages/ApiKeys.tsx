@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
+import { KeyRoundIcon, PlusIcon, TriangleAlertIcon } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { toast } from 'sonner';
 import type { ApiKeyInfo } from '@echo/shared';
 import * as api from '../api';
 import { errorMessage } from '../api';
@@ -8,14 +10,33 @@ import { SourceChip } from '../components/Badge';
 import { CodeBlock } from '../components/CodeBlock';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { EmptyState } from '../components/EmptyState';
-import { Modal } from '../components/Modal';
+import { PageHeader } from '../components/PageHeader';
+import { PageLoading } from '../components/PageLoading';
 import { RelativeTime } from '../components/RelativeTime';
-import { PageLoading, Spinner } from '../components/Spinner';
-import { useToast } from '../components/Toast';
-import { EmptyKeyIcon, IconPlus } from '../components/icons';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import { Spinner } from '@/components/ui/spinner';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 
 export default function ApiKeysPage() {
-  const toast = useToast();
   const [keys, setKeys] = useState<ApiKeyInfo[] | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [newSecret, setNewSecret] = useState<{ name: string; secret: string } | null>(null);
@@ -26,7 +47,7 @@ export default function ApiKeysPage() {
       .listApiKeys()
       .then((res) => setKeys(res.keys))
       .catch((err) => toast.error(errorMessage(err)));
-  }, [toast]);
+  }, []);
 
   useEffect(() => {
     load();
@@ -46,82 +67,91 @@ export default function ApiKeysPage() {
 
   return (
     <div>
-      <div className="page-header">
-        <div>
-          <h1>API Keys</h1>
-          <p className="subtitle">
-            Keys let AI apps read and write your memories over MCP. See <Link to="/connect">Connect</Link> for
-            setup instructions.
-          </p>
-        </div>
-        <span className="spacer" />
-        <button type="button" className="btn btn-primary" onClick={() => setShowCreate(true)}>
-          <IconPlus />
-          Create key
-        </button>
-      </div>
+      <PageHeader
+        title="API Keys"
+        subtitle={
+          <>
+            Keys let AI apps read and write your memories over MCP. See{' '}
+            <Link to="/connect" className="font-medium text-foreground underline underline-offset-4">
+              Connect
+            </Link>{' '}
+            for setup instructions.
+          </>
+        }
+        actions={
+          <Button onClick={() => setShowCreate(true)}>
+            <PlusIcon data-icon="inline-start" />
+            Create key
+          </Button>
+        }
+      />
 
       {keys === null ? (
         <PageLoading />
       ) : keys.length === 0 ? (
         <EmptyState
-          icon={<EmptyKeyIcon />}
+          icon={<KeyRoundIcon />}
           title="No API keys"
           description="Create a key to connect Claude, Cursor, or any MCP client to your Echo memories."
           action={
-            <button type="button" className="btn btn-primary" onClick={() => setShowCreate(true)}>
-              <IconPlus />
+            <Button onClick={() => setShowCreate(true)}>
+              <PlusIcon data-icon="inline-start" />
               Create key
-            </button>
+            </Button>
           }
         />
       ) : (
-        <div className="table-wrap">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Source app</th>
-                <th>Key</th>
-                <th>Created</th>
-                <th>Last used</th>
-                <th>Status</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
+        <div className="overflow-x-auto rounded-xl border bg-card">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Source app</TableHead>
+                <TableHead>Key</TableHead>
+                <TableHead>Created</TableHead>
+                <TableHead>Last used</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {keys.map((key) => {
                 const revoked = key.revokedAt !== null;
                 return (
-                  <tr key={key.id} style={revoked ? { opacity: 0.6 } : undefined}>
-                    <td style={{ fontWeight: 600 }}>{key.name}</td>
-                    <td>
+                  <TableRow key={key.id} className={cn(revoked && 'opacity-60')}>
+                    <TableCell className="font-semibold">{key.name}</TableCell>
+                    <TableCell>
                       <SourceChip app={key.sourceApp} />
-                    </td>
-                    <td>
-                      <span className="mono muted">{key.keyPrefix}</span>
-                    </td>
-                    <td className="muted">
+                    </TableCell>
+                    <TableCell>
+                      <span className="font-mono text-xs text-muted-foreground">{key.keyPrefix}</span>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
                       <RelativeTime date={key.createdAt} />
-                    </td>
-                    <td className="muted">{key.lastUsedAt ? <RelativeTime date={key.lastUsedAt} /> : 'Never'}</td>
-                    <td>
-                      <span className={`badge badge-status-${revoked ? 'revoked' : 'active'}`}>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {key.lastUsedAt ? <RelativeTime date={key.lastUsedAt} /> : 'Never'}
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={revoked ? 'secondary' : 'outline'}
+                        className={cn(!revoked && 'border-success/35 bg-success/10 text-success')}
+                      >
                         {revoked ? 'revoked' : 'active'}
-                      </span>
-                    </td>
-                    <td style={{ textAlign: 'right' }}>
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
                       {!revoked && (
-                        <button type="button" className="btn btn-danger btn-sm" onClick={() => setRevokeTarget(key)}>
+                        <Button variant="destructive" size="sm" onClick={() => setRevokeTarget(key)}>
                           Revoke
-                        </button>
+                        </Button>
                       )}
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 );
               })}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       )}
 
@@ -137,21 +167,24 @@ export default function ApiKeysPage() {
       )}
 
       {newSecret && (
-        <Modal title={`Key created: ${newSecret.name}`} onClose={() => setNewSecret(null)} width={560}>
-          <div className="secret-warning">
-            <span>⚠</span>
-            <span>
-              This is the only time the full key is shown. Copy it now and store it somewhere safe — Echo keeps
-              only a hashed version.
-            </span>
-          </div>
-          <CodeBlock code={newSecret.secret} />
-          <div className="row" style={{ justifyContent: 'flex-end', marginTop: 16 }}>
-            <button type="button" className="btn btn-primary" onClick={() => setNewSecret(null)}>
-              Done
-            </button>
-          </div>
-        </Modal>
+        <Dialog open onOpenChange={(open) => !open && setNewSecret(null)}>
+          <DialogContent className="sm:max-w-[560px]">
+            <DialogHeader>
+              <DialogTitle>Key created: {newSecret.name}</DialogTitle>
+            </DialogHeader>
+            <Alert className="border-warning/40 text-warning">
+              <TriangleAlertIcon />
+              <AlertDescription className="text-warning/90">
+                This is the only time the full key is shown. Copy it now and store it somewhere safe — Echo
+                keeps only a hashed version.
+              </AlertDescription>
+            </Alert>
+            <CodeBlock code={newSecret.secret} />
+            <DialogFooter>
+              <Button onClick={() => setNewSecret(null)}>Done</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
 
       {revokeTarget && (
@@ -205,42 +238,51 @@ function CreateKeyModal({
   };
 
   return (
-    <Modal title="Create API key" onClose={onClose}>
-      <form onSubmit={(e) => void submit(e)}>
-        {error && <div className="form-error">{error}</div>}
-        <div className="field">
-          <label htmlFor="key-name">Name</label>
-          <input
-            id="key-name"
-            className="input"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Laptop — Claude Code"
-            autoFocus
-            required
-          />
-        </div>
-        <div className="field">
-          <label htmlFor="key-source">Source app</label>
-          <input
-            id="key-source"
-            className="input"
-            value={sourceApp}
-            onChange={(e) => setSourceApp(e.target.value)}
-            placeholder="claude-code, cursor, chatgpt…"
-          />
-          <div className="hint">Label attached to memories written with this key.</div>
-        </div>
-        <div className="modal-footer" style={{ padding: '14px 0 0', borderTop: '1px solid var(--border)' }}>
-          <button type="button" className="btn" onClick={onClose} disabled={pending}>
-            Cancel
-          </button>
-          <button type="submit" className="btn btn-primary" disabled={pending}>
-            {pending && <Spinner size={13} />}
-            Create key
-          </button>
-        </div>
-      </form>
-    </Modal>
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Create API key</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={(e) => void submit(e)}>
+          <FieldGroup>
+            {error && (
+              <Alert variant="destructive">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+            <Field>
+              <FieldLabel htmlFor="key-name">Name</FieldLabel>
+              <Input
+                id="key-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g. Laptop — Claude Code"
+                autoFocus
+                required
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="key-source">Source app</FieldLabel>
+              <Input
+                id="key-source"
+                value={sourceApp}
+                onChange={(e) => setSourceApp(e.target.value)}
+                placeholder="claude-code, cursor, chatgpt…"
+              />
+              <FieldDescription>Label attached to memories written with this key.</FieldDescription>
+            </Field>
+          </FieldGroup>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" type="button" onClick={onClose} disabled={pending}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={pending}>
+              {pending && <Spinner />}
+              Create key
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

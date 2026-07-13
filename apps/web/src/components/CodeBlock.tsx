@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { CheckIcon, CopyIcon } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 async function copyText(text: string): Promise<boolean> {
   try {
@@ -21,11 +23,13 @@ export function CodeBlock({ code }: { code: string }) {
   };
 
   return (
-    <div className="codeblock">
-      <pre>{code}</pre>
-      <button type="button" className="btn btn-sm codeblock-copy" onClick={() => void onCopy()}>
+    <div className="relative rounded-lg border bg-background dark:bg-input/10">
+      <pre className="overflow-x-auto whitespace-pre py-3 pl-3 pr-20 font-mono text-xs leading-relaxed">
+        {code}
+      </pre>
+      <Button variant="outline" size="sm" className="absolute right-2 top-2" onClick={() => void onCopy()}>
         {copied ? 'Copied!' : 'Copy'}
-      </button>
+      </Button>
     </div>
   );
 }
@@ -42,17 +46,8 @@ export function CopyButton({ text, label = 'Copy' }: { text: string; label?: str
   };
 
   return (
-    <button type="button" className="copy-inline" onClick={() => void onCopy()} title={label} aria-label={label}>
-      {copied ? (
-        <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="var(--success)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M2 7.5 5.5 11 12 3.5" />
-        </svg>
-      ) : (
-        <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.2">
-          <rect x="4.5" y="4.5" width="8" height="8" rx="1.5" />
-          <path d="M9.5 4.5v-2a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2" />
-        </svg>
-      )}
-    </button>
+    <Button variant="ghost" size="icon-sm" onClick={() => void onCopy()} title={label} aria-label={label}>
+      {copied ? <CheckIcon className="text-success" /> : <CopyIcon />}
+    </Button>
   );
 }

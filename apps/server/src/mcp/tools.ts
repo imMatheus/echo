@@ -1,11 +1,11 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { Memory, MemorySearchResult } from '@echo/shared';
 import { z } from 'zod';
-import { getAccessibleScopes, resolveScopeSelector } from '../core/access.js';
-import { createMemory, deleteMemory, listMemories, searchMemories } from '../core/memories.js';
-import { VERSION } from '../config.js';
-import { HttpError } from '../lib/http-error.js';
-import type { AppContext, AuthContext } from '../types.js';
+import { getAccessibleScopes, resolveScopeSelector } from '@/core/access';
+import { createMemory, deleteMemory, listMemories, searchMemories } from '@/core/memories';
+import { VERSION } from '@/config';
+import { HttpError } from '@/lib/http-error';
+import type { AppContext, AuthContext } from '@/types';
 
 type ToolResult = { content: Array<{ type: 'text'; text: string }>; isError?: boolean };
 

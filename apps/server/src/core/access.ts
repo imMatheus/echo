@@ -1,5 +1,5 @@
 import type { ScopeType, ScopeWithAccess } from '@echo/shared';
-import type { AppContext } from '../types.js';
+import type { AppContext } from '@/types';
 
 /**
  * Access rules (the privacy boundary of the whole system):

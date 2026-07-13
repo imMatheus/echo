@@ -1,6 +1,6 @@
-import type { Db } from './db.js';
-import type { Config } from './config.js';
-import type { EmbeddingProvider } from './lib/embeddings.js';
+import type { Db } from './db';
+import type { Config } from './config';
+import type { EmbeddingProvider } from './lib/embeddings';
 import type { FastifyBaseLogger } from 'fastify';
 
 /** Resolved identity for a request, whether it arrived via session cookie or API key. */

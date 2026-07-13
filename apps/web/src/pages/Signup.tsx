@@ -5,8 +5,17 @@ import type { ServerMeta } from '@echo/shared';
 import * as api from '../api';
 import { errorMessage } from '../api';
 import { useAuth } from '../auth';
-import { Spinner } from '../components/Spinner';
-import { LogoMark } from '../components/icons';
+import { AuthLayout } from './Login';
+import { Alert, AlertTitle } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import {
+  Field,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+} from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import { Spinner } from '@/components/ui/spinner';
 
 export default function SignupPage() {
   const { user, loading, refresh } = useAuth();
@@ -50,50 +59,52 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="auth-page">
-      <div className="auth-card">
-        <div className="auth-logo">
-          <LogoMark size={40} />
-          <span className="wordmark">Echo</span>
-          <span className="tagline">Create your account</span>
-        </div>
-
-        {signupDisabled ? (
-          <div className="inline-note" style={{ textAlign: 'center' }}>
-            Sign-ups are disabled on this server.
-          </div>
-        ) : (
-          <form onSubmit={(e) => void submit(e)}>
-            {error && <div className="form-error">{error}</div>}
-            <div className="field">
-              <label htmlFor="signup-name">Name</label>
-              <input
+    <AuthLayout>
+      {signupDisabled ? (
+        <Alert>
+          <AlertTitle>Sign-ups are disabled on this server.</AlertTitle>
+        </Alert>
+      ) : (
+        <form className="flex flex-col gap-6" onSubmit={(e) => void submit(e)}>
+          <FieldGroup>
+            <div className="flex flex-col items-center gap-1 text-center">
+              <h1 className="font-heading text-2xl font-bold">Create your account</h1>
+              <p className="text-sm text-balance text-muted-foreground">
+                Enter your details below to get started
+              </p>
+            </div>
+            {error && (
+              <Alert variant="destructive">
+                <AlertTitle>{error}</AlertTitle>
+              </Alert>
+            )}
+            <Field>
+              <FieldLabel htmlFor="signup-name">Name</FieldLabel>
+              <Input
                 id="signup-name"
-                className="input"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 autoComplete="name"
                 required
                 autoFocus
               />
-            </div>
-            <div className="field">
-              <label htmlFor="signup-email">Email</label>
-              <input
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="signup-email">Email</FieldLabel>
+              <Input
                 id="signup-email"
-                className="input"
                 type="email"
+                placeholder="m@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 autoComplete="email"
                 required
               />
-            </div>
-            <div className="field">
-              <label htmlFor="signup-password">Password</label>
-              <input
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="signup-password">Password</FieldLabel>
+              <Input
                 id="signup-password"
-                className="input"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -101,20 +112,23 @@ export default function SignupPage() {
                 minLength={8}
                 required
               />
-              <div className="hint">At least 8 characters.</div>
-            </div>
-            <button type="submit" className="btn btn-primary btn-block" disabled={pending}>
-              {pending && <Spinner size={13} />}
-              Create account
-            </button>
-          </form>
-        )}
-
-        <div className="auth-alt">
-          Already have an account? <Link to="/login">Log in</Link>
-        </div>
-      </div>
-      <div className="auth-footer">{meta ? `${meta.name} v${meta.version}` : ' '}</div>
-    </div>
+              <FieldDescription>At least 8 characters.</FieldDescription>
+            </Field>
+            <Field>
+              <Button type="submit" disabled={pending}>
+                {pending && <Spinner />}
+                Create account
+              </Button>
+            </Field>
+            <FieldDescription className="text-center">
+              Already have an account?{' '}
+              <Link to="/login" className="underline underline-offset-4">
+                Log in
+              </Link>
+            </FieldDescription>
+          </FieldGroup>
+        </form>
+      )}
+    </AuthLayout>
   );
 }

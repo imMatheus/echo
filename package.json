@@ -13,7 +13,7 @@
   "scripts": {
     "build": "bun run --filter './packages/*' --filter './apps/*' build",
     "dev": "bun run --filter @echo/server --filter @echo/web dev",
-    "start": "node apps/server/dist/index.js",
+    "start": "bun apps/server/src/index.ts",
     "test": "bun run --filter './packages/*' --filter './apps/*' test",
     "typecheck": "bun run --filter './packages/*' --filter './apps/*' typecheck"
   }

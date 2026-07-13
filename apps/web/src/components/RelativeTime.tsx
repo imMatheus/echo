@@ -21,6 +21,6 @@ export function formatRelative(iso: string): string {
 
 /** "2h ago" with the full timestamp in a tooltip. */
 export function RelativeTime({ date }: { date: string | null | undefined }) {
-  if (!date) return <span className="muted">—</span>;
+  if (!date) return <span className="text-muted-foreground">—</span>;
   return <span title={new Date(date).toLocaleString()}>{formatRelative(date)}</span>;
 }

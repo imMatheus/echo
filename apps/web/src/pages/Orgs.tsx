@@ -1,15 +1,27 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
+import { Building2Icon, PlusIcon } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import type { OrganizationWithRole } from '@echo/shared';
-import * as api from '../api';
-import { errorMessage } from '../api';
-import { RoleBadge } from '../components/Badge';
-import { EmptyState } from '../components/EmptyState';
-import { Modal } from '../components/Modal';
-import { PageLoading, Spinner } from '../components/Spinner';
-import { useToast } from '../components/Toast';
-import { EmptyOrgIcon, IconPlus } from '../components/icons';
+import * as api from '@/api';
+import { errorMessage } from '@/api';
+import { RoleBadge } from '@/components/Badge';
+import { EmptyState } from '@/components/EmptyState';
+import { PageHeader } from '@/components/PageHeader';
+import { PageLoading } from '@/components/PageLoading';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import { Spinner } from '@/components/ui/spinner';
 
 export function slugify(name: string): string {
   return name
@@ -20,7 +32,6 @@ export function slugify(name: string): string {
 }
 
 export default function OrgsPage() {
-  const toast = useToast();
   const [orgs, setOrgs] = useState<OrganizationWithRole[] | null>(null);
   const [showCreate, setShowCreate] = useState(false);
 
@@ -29,7 +40,7 @@ export default function OrgsPage() {
       .listOrgs()
       .then((res) => setOrgs(res.orgs))
       .catch((err) => toast.error(errorMessage(err)));
-  }, [toast]);
+  }, []);
 
   useEffect(() => {
     load();
@@ -37,38 +48,41 @@ export default function OrgsPage() {
 
   return (
     <div>
-      <div className="page-header">
-        <div>
-          <h1>Organizations</h1>
-          <p className="subtitle">Share memories with your team through org, workspace, team, and project scopes.</p>
-        </div>
-        <span className="spacer" />
-        <button type="button" className="btn btn-primary" onClick={() => setShowCreate(true)}>
-          <IconPlus />
-          New organization
-        </button>
-      </div>
+      <PageHeader
+        title="Organizations"
+        subtitle="Share memories with your team through org, workspace, team, and project scopes."
+        actions={
+          <Button onClick={() => setShowCreate(true)}>
+            <PlusIcon data-icon="inline-start" />
+            New organization
+          </Button>
+        }
+      />
 
       {orgs === null ? (
         <PageLoading />
       ) : orgs.length === 0 ? (
         <EmptyState
-          icon={<EmptyOrgIcon />}
+          icon={<Building2Icon />}
           title="No organizations"
           description="Create an organization to share context with teammates across your AI tools."
           action={
-            <button type="button" className="btn btn-primary" onClick={() => setShowCreate(true)}>
-              <IconPlus />
+            <Button onClick={() => setShowCreate(true)}>
+              <PlusIcon data-icon="inline-start" />
               New organization
-            </button>
+            </Button>
           }
         />
       ) : (
-        <div className="org-grid">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3.5">
           {orgs.map((org) => (
-            <Link key={org.id} to={`/orgs/${org.id}`} className="org-card">
-              <h3>{org.name}</h3>
-              <div className="org-card-meta">
+            <Link
+              key={org.id}
+              to={`/orgs/${org.id}`}
+              className="block rounded-xl border bg-card p-4 transition-colors hover:border-ring/40 hover:bg-input/10"
+            >
+              <h3 className="mb-2 font-heading text-sm font-semibold tracking-tight">{org.name}</h3>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <RoleBadge role={org.role} />
                 <span>
                   {org.memberCount} member{org.memberCount === 1 ? '' : 's'}
@@ -85,7 +99,6 @@ export default function OrgsPage() {
 }
 
 function CreateOrgModal({ onClose }: { onClose: () => void }) {
-  const toast = useToast();
   const navigate = useNavigate();
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
@@ -120,45 +133,55 @@ function CreateOrgModal({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <Modal title="New organization" onClose={onClose}>
-      <form onSubmit={(e) => void submit(e)}>
-        {error && <div className="form-error">{error}</div>}
-        <div className="field">
-          <label htmlFor="org-name">Name</label>
-          <input
-            id="org-name"
-            className="input"
-            value={name}
-            onChange={(e) => onNameChange(e.target.value)}
-            placeholder="Acme Inc."
-            autoFocus
-            required
-          />
-        </div>
-        <div className="field">
-          <label htmlFor="org-slug">Slug</label>
-          <input
-            id="org-slug"
-            className="input mono"
-            value={slug}
-            onChange={(e) => {
-              setSlugTouched(true);
-              setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]+/g, '-'));
-            }}
-            placeholder="acme-inc"
-          />
-          <div className="hint">A short URL-friendly identifier.</div>
-        </div>
-        <div className="modal-footer" style={{ padding: '14px 0 0', borderTop: '1px solid var(--border)' }}>
-          <button type="button" className="btn" onClick={onClose} disabled={pending}>
-            Cancel
-          </button>
-          <button type="submit" className="btn btn-primary" disabled={pending}>
-            {pending && <Spinner size={13} />}
-            Create organization
-          </button>
-        </div>
-      </form>
-    </Modal>
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>New organization</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={(e) => void submit(e)}>
+          <FieldGroup>
+            {error && (
+              <Alert variant="destructive">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+            <Field>
+              <FieldLabel htmlFor="org-name">Name</FieldLabel>
+              <Input
+                id="org-name"
+                value={name}
+                onChange={(e) => onNameChange(e.target.value)}
+                placeholder="Acme Inc."
+                autoFocus
+                required
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="org-slug">Slug</FieldLabel>
+              <Input
+                id="org-slug"
+                className="font-mono"
+                value={slug}
+                onChange={(e) => {
+                  setSlugTouched(true);
+                  setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]+/g, '-'));
+                }}
+                placeholder="acme-inc"
+              />
+              <FieldDescription>A short URL-friendly identifier.</FieldDescription>
+            </Field>
+          </FieldGroup>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" type="button" onClick={onClose} disabled={pending}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={pending}>
+              {pending && <Spinner />}
+              Create organization
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

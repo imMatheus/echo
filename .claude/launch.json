@@ -3,9 +3,15 @@
   "configurations": [
     {
       "name": "echo",
-      "runtimeExecutable": "node",
-      "runtimeArgs": ["apps/server/dist/index.js"],
+      "runtimeExecutable": "bun",
+      "runtimeArgs": ["apps/server/src/index.ts"],
       "port": 3246
+    },
+    {
+      "name": "web",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "cd /Users/matheus/Desktop/echo-claude/apps/web && ./node_modules/.bin/vite"],
+      "port": 5173
     }
   ]
 }

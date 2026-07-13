@@ -1,3 +1,5 @@
+import { Button } from '@/components/ui/button';
+
 export function Pagination({
   offset,
   limit,
@@ -15,26 +17,16 @@ export function Pagination({
   const to = Math.min(offset + limit, total);
 
   return (
-    <div className="pagination">
+    <div className="mt-3.5 flex items-center justify-end gap-2.5 text-xs text-muted-foreground">
       <span>
         {from}–{to} of {total}
       </span>
-      <button
-        type="button"
-        className="btn btn-sm"
-        disabled={offset === 0}
-        onClick={() => onChange(Math.max(0, offset - limit))}
-      >
+      <Button variant="outline" size="sm" disabled={offset === 0} onClick={() => onChange(Math.max(0, offset - limit))}>
         Previous
-      </button>
-      <button
-        type="button"
-        className="btn btn-sm"
-        disabled={offset + limit >= total}
-        onClick={() => onChange(offset + limit)}
-      >
+      </Button>
+      <Button variant="outline" size="sm" disabled={offset + limit >= total} onClick={() => onChange(offset + limit)}>
         Next
-      </button>
+      </Button>
     </div>
   );
 }

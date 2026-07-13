@@ -115,14 +115,13 @@ Switching embedding providers is safe at any time: memories remember which model
 ## Development
 
 ```bash
-corepack enable
-pnpm install
+bun install
 docker compose -f docker-compose.dev.yml up -d   # pgvector on localhost:5433
-pnpm --filter @echo/shared build
-pnpm dev                                          # server :3246 + vite dev server :5173
+bun run --filter @echo/shared build
+bun run dev                                       # server :3246 + vite dev server :5173
 ```
 
-Open http://localhost:5173 (the dev dashboard proxies `/api` and `/mcp` to the server). Run tests with `pnpm test`, typecheck with `pnpm typecheck`, production build with `pnpm build`.
+Open http://localhost:5173 (the dev dashboard proxies `/api` and `/mcp` to the server). Run tests with `bun run test`, typecheck with `bun run typecheck`, production build with `bun run build`.
 
 ### Repository layout
 

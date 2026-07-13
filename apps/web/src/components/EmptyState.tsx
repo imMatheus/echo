@@ -1,4 +1,12 @@
 import type { ReactNode } from 'react';
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/ui/empty';
 
 export function EmptyState({
   icon,
@@ -12,11 +20,13 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="empty-state">
-      {icon && <div className="empty-icon">{icon}</div>}
-      <h3>{title}</h3>
-      <p>{description}</p>
-      {action}
-    </div>
+    <Empty className="border border-dashed py-12">
+      <EmptyHeader>
+        {icon && <EmptyMedia variant="icon">{icon}</EmptyMedia>}
+        <EmptyTitle>{title}</EmptyTitle>
+        <EmptyDescription>{description}</EmptyDescription>
+      </EmptyHeader>
+      {action && <EmptyContent>{action}</EmptyContent>}
+    </Empty>
   );
 }
