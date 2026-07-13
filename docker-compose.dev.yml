@@ -1,0 +1,16 @@
+# Development database only: docker compose -f docker-compose.dev.yml up -d
+# Matches the default DATABASE_URL (postgres://echo:echo@localhost:5433/echo).
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: echo
+      POSTGRES_PASSWORD: echo
+      POSTGRES_DB: echo
+    volumes:
+      - echo-db-dev:/var/lib/postgresql/data
+
+volumes:
+  echo-db-dev:

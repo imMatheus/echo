@@ -1,0 +1,44 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: echo
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-echo}
+      POSTGRES_DB: echo
+    volumes:
+      - echo-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U echo -d echo"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  app:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3246}:3246"
+    environment:
+      DATABASE_URL: postgres://echo:${POSTGRES_PASSWORD:-echo}@db:5432/echo
+      APP_URL: ${APP_URL:-}
+      DISABLE_SIGNUP: ${DISABLE_SIGNUP:-false}
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+      EMBEDDINGS_PROVIDER: ${EMBEDDINGS_PROVIDER:-none}
+      EMBEDDINGS_MODEL: ${EMBEDDINGS_MODEL:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      VOYAGE_API_KEY: ${VOYAGE_API_KEY:-}
+      OLLAMA_URL: ${OLLAMA_URL:-}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3246/api/v1/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  echo-db-data:
