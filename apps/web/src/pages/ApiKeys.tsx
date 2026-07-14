@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { KeyRoundIcon, PlusIcon, TriangleAlertIcon } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import type { ApiKeyInfo } from '@echo/shared';
 import * as api from '../api';
 import { errorMessage } from '../api';
+import { useApiKeys } from '@/hooks';
 import { SourceChip } from '../components/Badge';
 import { CodeBlock } from '../components/CodeBlock';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -37,28 +38,17 @@ import {
 import { cn } from '@/lib/utils';
 
 export default function ApiKeysPage() {
-  const [keys, setKeys] = useState<ApiKeyInfo[] | null>(null);
+  const { data: keys, mutate } = useApiKeys();
   const [showCreate, setShowCreate] = useState(false);
   const [newSecret, setNewSecret] = useState<{ name: string; secret: string } | null>(null);
   const [revokeTarget, setRevokeTarget] = useState<ApiKeyInfo | null>(null);
-
-  const load = useCallback(() => {
-    api
-      .listApiKeys()
-      .then((res) => setKeys(res.keys))
-      .catch((err) => toast.error(errorMessage(err)));
-  }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
 
   const revoke = async () => {
     if (!revokeTarget) return;
     try {
       await api.revokeApiKey(revokeTarget.id);
       toast.success(`Revoked “${revokeTarget.name}”`);
-      load();
+      await mutate();
     } catch (err) {
       toast.error(errorMessage(err));
       throw err;
@@ -86,7 +76,7 @@ export default function ApiKeysPage() {
         }
       />
 
-      {keys === null ? (
+      {!keys ? (
         <PageLoading />
       ) : keys.length === 0 ? (
         <EmptyState
@@ -161,7 +151,7 @@ export default function ApiKeysPage() {
           onCreated={(name, secret) => {
             setShowCreate(false);
             setNewSecret({ name, secret });
-            load();
+            void mutate();
           }}
         />
       )}

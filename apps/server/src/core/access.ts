@@ -1,4 +1,5 @@
 import type { ScopeType, ScopeWithAccess } from '@echo/shared';
+import { type SQL, sql } from 'drizzle-orm';
 import type { AppContext } from '@/types';
 
 /**
@@ -23,7 +24,10 @@ export interface ScopeAccess {
   memoryCount: number;
 }
 
-const ACCESS_SELECT = `
+// This query is the privacy boundary of the whole system, so it stays hand-written
+// SQL (executed through Drizzle's `sql` runner) rather than reshaped into the query
+// builder — the OR-logic and the correlated memory_count subquery must remain exact.
+const accessSelect = (userId: string): SQL => sql`
   SELECT s.id, s.type, s.name, s.org_id, s.user_id, s.created_at,
          o.name AS org_name,
          om.role AS org_role,
@@ -33,11 +37,11 @@ const ACCESS_SELECT = `
               AND (m.expires_at IS NULL OR m.expires_at > now())) AS memory_count
   FROM scopes s
   LEFT JOIN organizations o ON o.id = s.org_id
-  LEFT JOIN org_members om ON om.org_id = s.org_id AND om.user_id = $1
-  LEFT JOIN scope_members sm ON sm.scope_id = s.id AND sm.user_id = $1`;
+  LEFT JOIN org_members om ON om.org_id = s.org_id AND om.user_id = ${userId}
+  LEFT JOIN scope_members sm ON sm.scope_id = s.id AND sm.user_id = ${userId}`;
 
-const ACCESS_WHERE = `
-  ((s.type = 'personal' AND s.user_id = $1)
+const accessWhere = (userId: string): SQL => sql`
+  ((s.type = 'personal' AND s.user_id = ${userId})
    OR (om.user_id IS NOT NULL
        AND (s.type = 'organization' OR sm.user_id IS NOT NULL OR om.role IN ('owner', 'admin'))))`;
 
@@ -51,25 +55,27 @@ function mapAccess(row: any): ScopeAccess {
     orgId: row.org_id,
     orgName: row.org_name,
     userId: row.user_id,
-    createdAt: row.created_at,
+    // Raw db.execute returns timestamps/ints as strings — normalize to the declared types.
+    createdAt: new Date(row.created_at),
     canWrite: true, // every readable scope is writable in v1
     canManage: isPersonal || isOrgAdmin,
-    memoryCount: row.memory_count,
+    memoryCount: Number(row.memory_count),
   };
 }
 
 export async function getAccessibleScopes(app: AppContext, userId: string): Promise<ScopeAccess[]> {
-  const { rows } = await app.db.query(
-    `${ACCESS_SELECT} WHERE ${ACCESS_WHERE}
+  const { rows } = await app.db.execute(
+    sql`${accessSelect(userId)} WHERE ${accessWhere(userId)}
      ORDER BY (s.type = 'personal') DESC, o.name NULLS FIRST, (s.type = 'organization') DESC, s.name`,
-    [userId],
   );
   return rows.map(mapAccess);
 }
 
 /** null when the scope doesn't exist OR the user cannot see it (indistinguishable on purpose). */
 export async function getScopeAccess(app: AppContext, userId: string, scopeId: string): Promise<ScopeAccess | null> {
-  const { rows } = await app.db.query(`${ACCESS_SELECT} WHERE s.id = $2 AND ${ACCESS_WHERE}`, [userId, scopeId]);
+  const { rows } = await app.db.execute(
+    sql`${accessSelect(userId)} WHERE s.id = ${scopeId} AND ${accessWhere(userId)}`,
+  );
   return rows[0] ? mapAccess(rows[0]) : null;
 }
 

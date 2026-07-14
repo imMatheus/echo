@@ -126,7 +126,8 @@ Open http://localhost:5173 (the dev dashboard proxies `/api` and `/mcp` to the s
 ### Repository layout
 
 ```
-apps/server         Fastify API, MCP endpoint, migrations, access control, audit
+apps/server         Fastify API, MCP endpoint, Drizzle schema + migrations, access control, audit
+apps/server/drizzle Generated SQL migrations (drizzle-kit), applied on boot
 apps/web            React dashboard (memories, orgs, API keys, audit, connect)
 packages/shared     Types shared by server, dashboard, and integrations
 packages/mcp-bridge echo-context-mcp — stdio bridge for local-only MCP clients
@@ -139,6 +140,7 @@ docs/API.md         Full REST API reference
 - **Stateless MCP endpoint** — each `POST /mcp` builds a fresh server/transport pair; no session affinity, horizontal scaling is trivial.
 - **Dimension-agnostic vectors** — the `embedding` column is an untyped `vector`, so any provider/dimension works without a schema change; rows are filtered by `embedding_model` before distance comparison.
 - **Soft deletes** — deleted and expired memories vanish from every query immediately and are purged permanently after 30 days.
+- **Drizzle ORM** — the schema lives in `apps/server/src/db/schema.ts`; core queries use the Drizzle query builder, while the hybrid vector/full-text recall stays hand-written SQL run through Drizzle's `sql` executor. Migrations are generated with `bun --filter @echo/server db:generate` and applied automatically on server start.
 
 ## Hosted vs self-hosted
 

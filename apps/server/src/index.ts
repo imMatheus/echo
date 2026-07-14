@@ -1,6 +1,7 @@
+import { sql } from 'drizzle-orm';
 import { loadConfig, VERSION } from './config';
 import { sweepMemories } from './core/memories';
-import { createPool, migrate, type Db } from './db';
+import { createDb, migrate, type Db } from './db';
 import { createEmbeddingProvider } from './lib/embeddings';
 import { buildApp } from './http/app';
 import type { AppContext } from './types';
@@ -10,7 +11,7 @@ const SWEEP_INTERVAL_MS = 60 * 60 * 1000;
 async function waitForDb(db: Db, attempts = 30): Promise<void> {
   for (let i = 1; i <= attempts; i++) {
     try {
-      await db.query('SELECT 1');
+      await db.execute(sql`SELECT 1`);
       return;
     } catch (err) {
       if (i === attempts) throw err;
@@ -22,7 +23,7 @@ async function waitForDb(db: Db, attempts = 30): Promise<void> {
 
 async function main(): Promise<void> {
   const config = loadConfig();
-  const db = createPool(config.DATABASE_URL);
+  const db = createDb(config.DATABASE_URL);
   await waitForDb(db);
   await migrate(db, (msg) => console.log(msg));
 
@@ -45,7 +46,7 @@ async function main(): Promise<void> {
     fastify.log.info(`${signal} received, shutting down`);
     clearInterval(sweepTimer);
     await fastify.close();
-    await db.end();
+    await db.$client.end();
     process.exit(0);
   };
   process.on('SIGINT', () => void shutdown('SIGINT'));

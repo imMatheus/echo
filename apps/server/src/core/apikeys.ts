@@ -1,18 +1,22 @@
 import type { ApiKeyInfo, CreateApiKeyResponse } from '@echo/shared';
+import { and, desc, eq, isNull, sql } from 'drizzle-orm';
+import { apiKeys, users } from '@/db/schema';
 import { generateApiKey, sha256Hex } from '@/lib/crypto';
 import { notFound } from '@/lib/http-error';
 import type { AppContext, AuthContext } from '@/types';
 import { logAudit } from './audit';
 
-function mapKey(row: any): ApiKeyInfo {
+type ApiKeyRow = typeof apiKeys.$inferSelect;
+
+function mapKey(row: ApiKeyRow): ApiKeyInfo {
   return {
     id: row.id,
     name: row.name,
-    sourceApp: row.source_app,
-    keyPrefix: row.key_prefix,
-    lastUsedAt: row.last_used_at ? row.last_used_at.toISOString() : null,
-    createdAt: row.created_at.toISOString(),
-    revokedAt: row.revoked_at ? row.revoked_at.toISOString() : null,
+    sourceApp: row.sourceApp,
+    keyPrefix: row.keyPrefix,
+    lastUsedAt: row.lastUsedAt ? row.lastUsedAt.toISOString() : null,
+    createdAt: row.createdAt.toISOString(),
+    revokedAt: row.revokedAt ? row.revokedAt.toISOString() : null,
   };
 }
 
@@ -23,31 +27,35 @@ export async function createApiKey(
 ): Promise<CreateApiKeyResponse> {
   const { secret, prefix, hash } = generateApiKey();
   const sourceApp = input.sourceApp?.trim() || input.name.trim().toLowerCase().replace(/\s+/g, '-');
-  const { rows } = await app.db.query(
-    `INSERT INTO api_keys (user_id, name, source_app, key_prefix, key_hash)
-     VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-    [ctx.userId, input.name, sourceApp, prefix, hash],
-  );
+  const [row] = await app.db
+    .insert(apiKeys)
+    .values({ userId: ctx.userId, name: input.name, sourceApp, keyPrefix: prefix, keyHash: hash })
+    .returning();
   await logAudit(app, {
     action: 'apikey.create',
     actorUserId: ctx.userId,
     sourceApp: ctx.sourceApp,
     details: { keyName: input.name, keyPrefix: prefix },
   });
-  return { key: mapKey(rows[0]), secret };
+  return { key: mapKey(row), secret };
 }
 
 export async function listApiKeys(app: AppContext, userId: string): Promise<ApiKeyInfo[]> {
-  const { rows } = await app.db.query('SELECT * FROM api_keys WHERE user_id = $1 ORDER BY created_at DESC', [userId]);
+  const rows = await app.db
+    .select()
+    .from(apiKeys)
+    .where(eq(apiKeys.userId, userId))
+    .orderBy(desc(apiKeys.createdAt));
   return rows.map(mapKey);
 }
 
 export async function revokeApiKey(app: AppContext, ctx: AuthContext, keyId: string): Promise<void> {
-  const res = await app.db.query(
-    'UPDATE api_keys SET revoked_at = now() WHERE id = $1 AND user_id = $2 AND revoked_at IS NULL',
-    [keyId, ctx.userId],
-  );
-  if (!res.rowCount) throw notFound('API key not found');
+  const revoked = await app.db
+    .update(apiKeys)
+    .set({ revokedAt: sql`now()` })
+    .where(and(eq(apiKeys.id, keyId), eq(apiKeys.userId, ctx.userId), isNull(apiKeys.revokedAt)))
+    .returning({ id: apiKeys.id });
+  if (!revoked.length) throw notFound('API key not found');
   await logAudit(app, {
     action: 'apikey.revoke',
     actorUserId: ctx.userId,
@@ -65,26 +73,34 @@ export interface ResolvedApiKey {
 }
 
 export async function resolveApiKey(app: AppContext, secret: string): Promise<ResolvedApiKey | null> {
-  const { rows } = await app.db.query(
-    `SELECT k.id AS key_id, k.source_app, k.last_used_at, u.id AS user_id, u.name, u.email
-     FROM api_keys k JOIN users u ON u.id = k.user_id
-     WHERE k.key_hash = $1 AND k.revoked_at IS NULL`,
-    [sha256Hex(secret)],
-  );
-  if (!rows[0]) return null;
-  const row = rows[0];
+  const [row] = await app.db
+    .select({
+      keyId: apiKeys.id,
+      sourceApp: apiKeys.sourceApp,
+      lastUsedAt: apiKeys.lastUsedAt,
+      userId: users.id,
+      userName: users.name,
+      userEmail: users.email,
+    })
+    .from(apiKeys)
+    .innerJoin(users, eq(users.id, apiKeys.userId))
+    .where(and(eq(apiKeys.keyHash, sha256Hex(secret)), isNull(apiKeys.revokedAt)))
+    .limit(1);
+  if (!row) return null;
   // Throttled last-used tracking; fire-and-forget.
-  const stale = !row.last_used_at || Date.now() - row.last_used_at.getTime() > 60_000;
+  const stale = !row.lastUsedAt || Date.now() - row.lastUsedAt.getTime() > 60_000;
   if (stale) {
     app.db
-      .query('UPDATE api_keys SET last_used_at = now() WHERE id = $1', [row.key_id])
+      .update(apiKeys)
+      .set({ lastUsedAt: sql`now()` })
+      .where(eq(apiKeys.id, row.keyId))
       .catch((err) => app.log.error({ err }, 'failed to update api key last_used_at'));
   }
   return {
-    keyId: row.key_id,
-    sourceApp: row.source_app,
-    userId: row.user_id,
-    userName: row.name,
-    userEmail: row.email,
+    keyId: row.keyId,
+    sourceApp: row.sourceApp,
+    userId: row.userId,
+    userName: row.userName,
+    userEmail: row.userEmail,
   };
 }

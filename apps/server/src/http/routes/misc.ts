@@ -1,4 +1,5 @@
 import type { ServerMeta } from '@echo/shared';
+import { sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { listUserAudit } from '@/core/audit';
@@ -28,7 +29,7 @@ export function miscRoutes(app: AppContext) {
 
     f.get('/health', async (req, reply) => {
       try {
-        await app.db.query('SELECT 1');
+        await app.db.execute(sql`SELECT 1`);
         return { ok: true, db: true };
       } catch {
         reply.code(503);

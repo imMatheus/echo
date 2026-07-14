@@ -1,7 +1,5 @@
-import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import type { ServerMeta } from '@echo/shared';
-import * as api from '@/api';
+import { useMeta } from '@/hooks';
 import { CodeBlock } from '@/components/CodeBlock';
 import { PageHeader } from '@/components/PageHeader';
 import { Badge } from '@/components/ui/badge';
@@ -19,17 +17,8 @@ const MCP_TOOLS: Array<{ name: string; description: string }> = [
 const INLINE_CODE = 'rounded bg-muted px-1 py-px font-mono text-[0.7rem]';
 
 export default function ConnectPage() {
-  const [meta, setMeta] = useState<ServerMeta | null>(null);
+  const { data: meta } = useMeta();
   const origin = window.location.origin;
-
-  useEffect(() => {
-    api
-      .getMeta()
-      .then(setMeta)
-      .catch(() => {
-        // status line just won't render
-      });
-  }, []);
 
   const stdioConfig = JSON.stringify(
     {
@@ -47,6 +36,13 @@ export default function ConnectPage() {
     null,
     2,
   );
+
+  const codexConfig = [
+    '[mcp_servers.echo]',
+    'command = "npx"',
+    'args = ["-y", "echo-context-mcp"]',
+    `env = { ECHO_URL = "${origin}", ECHO_API_KEY = "YOUR_API_KEY" }`,
+  ].join('\n');
 
   return (
     <div>
@@ -99,6 +95,28 @@ export default function ConnectPage() {
           </CardHeader>
           <CardContent>
             <CodeBlock code={stdioConfig} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Codex / ChatGPT</CardTitle>
+            <CardDescription>
+              For the Codex CLI, add Echo to <code className={INLINE_CODE}>~/.codex/config.toml</code>. In ChatGPT,
+              enable developer mode and add a remote MCP connector pointing at the endpoint below.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3.5">
+            <div>
+              <div className="mb-1.5 text-xs font-medium text-muted-foreground">Codex CLI (config.toml)</div>
+              <CodeBlock code={codexConfig} />
+            </div>
+            <div>
+              <div className="mb-1.5 text-xs font-medium text-muted-foreground">
+                ChatGPT connector (remote MCP)
+              </div>
+              <CodeBlock code={`${origin}/mcp`} />
+            </div>
           </CardContent>
         </Card>
 

@@ -26,7 +26,7 @@ COPY --from=build /app/apps/server/package.json ./apps/server/package.json
 COPY --from=build /app/apps/server/tsconfig.json ./apps/server/tsconfig.json
 COPY --from=build /app/apps/server/node_modules ./apps/server/node_modules
 COPY --from=build /app/apps/server/src ./apps/server/src
-COPY --from=build /app/apps/server/migrations ./apps/server/migrations
+COPY --from=build /app/apps/server/drizzle ./apps/server/drizzle
 COPY --from=build /app/apps/web/dist ./apps/web/dist
 
 EXPOSE 3246

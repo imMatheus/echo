@@ -1,12 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import { LayersIcon, PlusIcon, SearchIcon } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
-import type { Memory, MemoryKind, MemorySearchResult, ScopeWithAccess } from '@echo/shared';
+import type { Memory, MemoryKind, ScopeWithAccess } from '@echo/shared';
 import { MEMORY_KINDS } from '@echo/shared';
-import * as api from '../api';
-import { errorMessage } from '../api';
+import { useMemories, useMemorySearch, useRevalidateMemories } from '@/hooks';
 import { KindBadge, ScopeBadge, SensitivityBadge, SourceChip, Tag } from './Badge';
 import { EmptyState } from './EmptyState';
 import { MemoryFormModal } from './MemoryFormModal';
@@ -60,12 +59,6 @@ export function MemoryCard({ memory, scorePill }: { memory: Memory; scorePill?: 
   );
 }
 
-interface ActiveSearch {
-  query: string;
-  results: MemorySearchResult[];
-  mode: 'hybrid' | 'fts';
-}
-
 /**
  * Browse + semantic-search UI over memories. Used by the main Memories page
  * (all readable scopes) and by the org detail Memories tab (org scopes only).
@@ -92,16 +85,14 @@ export function MemoryBrowser({
   const [tag, setTag] = useState('');
   const [offset, setOffset] = useState(0);
 
-  const [memories, setMemories] = useState<Memory[] | null>(null);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [refreshTick, setRefreshTick] = useState(0);
-
   const [searchInput, setSearchInput] = useState('');
-  const [search, setSearch] = useState<ActiveSearch | null>(null);
-  const [searching, setSearching] = useState(false);
+  // The active search request; null while browsing. Setting it drives the
+  // useMemorySearch SWR key below.
+  const [searchReq, setSearchReq] = useState<{ query: string; scope: string } | null>(null);
 
   const [showCreate, setShowCreate] = useState(false);
+
+  const revalidateMemories = useRevalidateMemories();
 
   const scopeItems = scopeSelectItems(
     scopes,
@@ -112,79 +103,52 @@ export function MemoryBrowser({
   const debouncedSourceApp = useDebouncedValue(sourceApp);
   const debouncedTag = useDebouncedValue(tag);
 
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    api
-      .listMemories({
-        scopeId: scopeId === 'all' ? undefined : scopeId || undefined,
-        kind: (kind === 'all' ? undefined : kind) as MemoryKind | undefined,
-        sourceApp: debouncedSourceApp.trim() || undefined,
-        tag: debouncedTag.trim() || undefined,
-        limit: PAGE_SIZE,
-        offset,
-      })
-      .then((res) => {
-        if (cancelled) return;
-        setMemories(res.memories);
-        setTotal(res.total);
-      })
-      .catch((err) => {
-        if (!cancelled) toast.error(errorMessage(err));
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [scopeId, kind, debouncedSourceApp, debouncedTag, offset, refreshTick]);
+  const { data: listData, isLoading, isValidating } = useMemories({
+    scopeId: scopeId === 'all' ? undefined : scopeId || undefined,
+    kind: (kind === 'all' ? undefined : kind) as MemoryKind | undefined,
+    sourceApp: debouncedSourceApp.trim() || undefined,
+    tag: debouncedTag.trim() || undefined,
+    limit: PAGE_SIZE,
+    offset,
+  });
+  const memories: Memory[] | null = listData?.memories ?? null;
+  const total = listData?.total ?? 0;
+
+  const { data: searchData, isValidating: searching } = useMemorySearch(
+    searchReq?.query ?? null,
+    searchReq?.scope ?? scopeId,
+  );
+  // Only treat search as active when the user has submitted one; keepPreviousData
+  // can otherwise leave stale results in the cache after clearing.
+  const search = searchReq ? (searchData ?? null) : null;
 
   const setFilter = (setter: (v: string) => void) => (value: string) => {
     setter(value);
     setOffset(0);
     // kind/source/tag filters only apply to browsing — leave any active search
     // when they change so the list reflects the new filters.
-    setSearch(null);
+    setSearchReq(null);
   };
 
-  const onScopeChange = async (value: string) => {
+  const onScopeChange = (value: string) => {
     setScopeId(value);
     setOffset(0);
-    if (search) {
-      // re-run the active search against the new scope selection
-      await runSearch(search.query, value);
-    }
+    // re-run any active search against the new scope selection
+    setSearchReq((prev) => (prev ? { ...prev, scope: value } : prev));
   };
 
-  const runSearch = async (query: string, scope: string) => {
-    setSearching(true);
-    try {
-      const res = await api.searchMemories({
-        query,
-        scopeIds: scope && scope !== 'all' ? [scope] : undefined,
-        limit: 50,
-      });
-      setSearch({ query, results: res.results, mode: res.mode });
-    } catch (err) {
-      toast.error(errorMessage(err));
-    } finally {
-      setSearching(false);
-    }
-  };
-
-  const onSearchSubmit = async (e: FormEvent) => {
+  const onSearchSubmit = (e: FormEvent) => {
     e.preventDefault();
     const query = searchInput.trim();
     if (!query) {
-      setSearch(null);
+      setSearchReq(null);
       return;
     }
-    await runSearch(query, scopeId);
+    setSearchReq({ query, scope: scopeId });
   };
 
   const clearSearch = () => {
-    setSearch(null);
+    setSearchReq(null);
     setSearchInput('');
   };
 
@@ -202,9 +166,9 @@ export function MemoryBrowser({
   const onCreated = () => {
     setShowCreate(false);
     toast.success('Memory created');
-    setSearch(null);
+    setSearchReq(null);
     setOffset(0);
-    setRefreshTick((t) => t + 1);
+    revalidateMemories();
   };
 
   const newMemoryButton = (
@@ -225,7 +189,7 @@ export function MemoryBrowser({
         </div>
       )}
 
-      <form className="mb-3 flex gap-2" onSubmit={(e) => void onSearchSubmit(e)}>
+      <form className="mb-3 flex gap-2" onSubmit={onSearchSubmit}>
         <div className="relative flex-1">
           <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -261,7 +225,7 @@ export function MemoryBrowser({
         </div>
       ) : (
         <div className="mb-4 flex flex-wrap gap-2">
-          <Select items={scopeItems} value={scopeId} onValueChange={(v) => void onScopeChange(v as string)}>
+          <Select items={scopeItems} value={scopeId} onValueChange={(v) => onScopeChange(v as string)}>
             <SelectTrigger className="w-48" aria-label="Filter by scope">
               <SelectValue />
             </SelectTrigger>
@@ -331,7 +295,7 @@ export function MemoryBrowser({
             ))}
           </div>
         )
-      ) : loading && memories === null ? (
+      ) : isLoading && memories === null ? (
         <PageLoading />
       ) : memories && memories.length === 0 ? (
         hasFilters ? (
@@ -360,7 +324,7 @@ export function MemoryBrowser({
         )
       ) : (
         <>
-          <div className={cn('flex flex-col gap-2.5', loading && 'opacity-55')}>
+          <div className={cn('flex flex-col gap-2.5', isValidating && 'opacity-55')}>
             {(memories ?? []).map((m) => (
               <MemoryCard key={m.id} memory={m} />
             ))}

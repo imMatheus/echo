@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Building2Icon, PlusIcon } from 'lucide-react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import type {
   OrgMember,
@@ -15,6 +16,7 @@ import { ORG_SCOPE_TYPES } from '@echo/shared';
 import type { AuditQuery } from '@/api';
 import * as api from '@/api';
 import { ApiRequestError, errorMessage } from '@/api';
+import { keys, useOrg, useOrgMembers, useScopeMembers, useScopes } from '@/hooks';
 import { AuditTable } from '@/components/AuditTable';
 import { RoleBadge, ScopeBadge } from '@/components/Badge';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
@@ -71,44 +73,18 @@ export default function OrgDetailPage() {
   const rawTab = searchParams.get('tab');
   const tab: Tab = (TABS as readonly string[]).includes(rawTab ?? '') ? (rawTab as Tab) : 'memories';
 
-  const [org, setOrg] = useState<Organization | null>(null);
-  const [role, setRole] = useState<OrgRole>('member');
-  const [scopes, setScopes] = useState<ScopeWithAccess[] | null>(null);
-  const [notFound, setNotFound] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const { data: orgData, error, isLoading: orgLoading } = useOrg(orgId);
+  const { data: allScopes, isLoading: scopesLoading, mutate: mutateScopes } = useScopes();
 
-  const loadScopes = useCallback(() => {
-    return api
-      .listScopes()
-      .then((res) => setScopes(res.scopes.filter((s) => s.orgId === orgId)))
-      .catch((err) => toast.error(errorMessage(err)));
-  }, [orgId]);
+  const org = orgData?.org ?? null;
+  const role: OrgRole = orgData?.role ?? 'member';
+  const scopes: ScopeWithAccess[] | null = allScopes
+    ? allScopes.filter((s) => s.orgId === orgId)
+    : null;
+  const notFound =
+    error instanceof ApiRequestError && (error.status === 404 || error.status === 403);
 
-  useEffect(() => {
-    if (!orgId) return;
-    let cancelled = false;
-    setLoading(true);
-    Promise.all([api.getOrg(orgId), api.listScopes()])
-      .then(([orgRes, scopesRes]) => {
-        if (cancelled) return;
-        setOrg(orgRes.org);
-        setRole(orgRes.role);
-        setScopes(scopesRes.scopes.filter((s) => s.orgId === orgId));
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        if (err instanceof ApiRequestError && (err.status === 404 || err.status === 403)) setNotFound(true);
-        else toast.error(errorMessage(err));
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [orgId]);
-
-  if (loading) return <PageLoading />;
+  if (orgLoading || scopesLoading) return <PageLoading />;
 
   if (notFound || !org) {
     return (
@@ -172,7 +148,12 @@ export default function OrgDetailPage() {
       {tab === 'members' && <MembersTab orgId={orgId} myRole={role} />}
 
       {tab === 'scopes' && (
-        <ScopesTab orgId={orgId} scopes={scopes ?? []} isAdmin={isAdmin} onChanged={() => void loadScopes()} />
+        <ScopesTab
+          orgId={orgId}
+          scopes={scopes ?? []}
+          isAdmin={isAdmin}
+          onChanged={() => void mutateScopes()}
+        />
       )}
 
       {tab === 'audit' &&
@@ -184,9 +165,7 @@ export default function OrgDetailPage() {
           </Alert>
         ))}
 
-      {tab === 'settings' && (
-        <SettingsTab org={org} isAdmin={isAdmin} onRenamed={(updated) => setOrg(updated)} />
-      )}
+      {tab === 'settings' && <SettingsTab org={org} isAdmin={isAdmin} />}
     </div>
   );
 }
@@ -196,31 +175,20 @@ export default function OrgDetailPage() {
 // ---------------------------------------------------------------------------
 
 function MembersTab({ orgId, myRole }: { orgId: string; myRole: OrgRole }) {
-  const [members, setMembers] = useState<OrgMember[] | null>(null);
+  const { data: members, mutate } = useOrgMembers(orgId);
   const [showAdd, setShowAdd] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<OrgMember | null>(null);
 
   const isAdmin = myRole === 'owner' || myRole === 'admin';
 
-  const load = useCallback(() => {
-    api
-      .listOrgMembers(orgId)
-      .then((res) => setMembers(res.members))
-      .catch((err) => toast.error(errorMessage(err)));
-  }, [orgId]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
   const changeRole = async (member: OrgMember, newRole: OrgRole) => {
     try {
       await api.updateOrgMember(orgId, member.userId, { role: newRole });
       toast.success(`${member.name} is now ${newRole}`);
-      load();
+      await mutate();
     } catch (err) {
       toast.error(errorMessage(err));
-      load(); // reset the select to the server state
+      await mutate(); // reset the select to the server state
     }
   };
 
@@ -229,14 +197,14 @@ function MembersTab({ orgId, myRole }: { orgId: string; myRole: OrgRole }) {
     try {
       await api.removeOrgMember(orgId, removeTarget.userId);
       toast.success(`Removed ${removeTarget.name}`);
-      load();
+      await mutate();
     } catch (err) {
       toast.error(errorMessage(err));
       throw err;
     }
   };
 
-  if (members === null) return <PageLoading />;
+  if (!members) return <PageLoading />;
 
   return (
     <div>
@@ -317,7 +285,7 @@ function MembersTab({ orgId, myRole }: { orgId: string; myRole: OrgRole }) {
             await api.addOrgMember(orgId, { email, role: memberRole });
             toast.success(`Added ${email}`);
             setShowAdd(false);
-            load();
+            await mutate();
           }}
         />
       )}
@@ -557,21 +525,10 @@ function ScopesTab({
 }
 
 function ScopeMembers({ scopeId }: { scopeId: string }) {
-  const [members, setMembers] = useState<ScopeMember[] | null>(null);
+  const { data: members, mutate } = useScopeMembers(scopeId);
   const [email, setEmail] = useState('');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(() => {
-    api
-      .listScopeMembers(scopeId)
-      .then((res) => setMembers(res.members))
-      .catch((err) => toast.error(errorMessage(err)));
-  }, [scopeId]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
 
   const add = async (e: FormEvent) => {
     e.preventDefault();
@@ -582,7 +539,7 @@ function ScopeMembers({ scopeId }: { scopeId: string }) {
       await api.addScopeMember(scopeId, email.trim());
       toast.success(`Added ${email.trim()}`);
       setEmail('');
-      load();
+      await mutate();
     } catch (err) {
       if (err instanceof ApiRequestError && err.status === 404) {
         setError('No matching user — they must already be a member of this organization.');
@@ -598,7 +555,7 @@ function ScopeMembers({ scopeId }: { scopeId: string }) {
     try {
       await api.removeScopeMember(scopeId, member.userId);
       toast.success(`Removed ${member.name}`);
-      load();
+      await mutate();
     } catch (err) {
       toast.error(errorMessage(err));
     }
@@ -606,7 +563,7 @@ function ScopeMembers({ scopeId }: { scopeId: string }) {
 
   return (
     <div className="mt-3 border-t pt-3">
-      {members === null ? (
+      {members == null ? (
         <Spinner />
       ) : (
         <>
@@ -739,18 +696,11 @@ function CreateScopeModal({
 
 function OrgAudit({ orgId }: { orgId: string }) {
   const fetchPage = useCallback((q: AuditQuery) => api.getOrgAudit(orgId, q), [orgId]);
-  return <AuditTable fetchPage={fetchPage} />;
+  return <AuditTable fetchPage={fetchPage} scopeKey={`org:${orgId}`} />;
 }
 
-function SettingsTab({
-  org,
-  isAdmin,
-  onRenamed,
-}: {
-  org: Organization;
-  isAdmin: boolean;
-  onRenamed: (org: Organization) => void;
-}) {
+function SettingsTab({ org, isAdmin }: { org: Organization; isAdmin: boolean }) {
+  const { mutate } = useSWRConfig();
   const [name, setName] = useState(org.name);
   const [pending, setPending] = useState(false);
 
@@ -759,8 +709,10 @@ function SettingsTab({
     if (!name.trim() || name.trim() === org.name) return;
     setPending(true);
     try {
-      const res = await api.updateOrg(org.id, { name: name.trim() });
-      onRenamed(res.org);
+      await api.updateOrg(org.id, { name: name.trim() });
+      // Refresh the org (drives the page header + this form) and the orgs list.
+      await mutate(keys.org(org.id));
+      void mutate(keys.orgs);
       toast.success('Organization renamed');
     } catch (err) {
       toast.error(errorMessage(err));

@@ -1,4 +1,7 @@
 import type { AuditEntry, AuditListResponse } from '@echo/shared';
+import { and, count, desc, eq, ilike } from 'drizzle-orm';
+import type { PgColumn } from 'drizzle-orm/pg-core';
+import { apiKeys, auditLogs, users } from '@/db/schema';
 import type { AppContext } from '@/types';
 
 export interface AuditEvent {
@@ -15,20 +18,16 @@ export interface AuditEvent {
 /** Best-effort append; auditing must never fail the operation being audited. */
 export async function logAudit(app: AppContext, event: AuditEvent): Promise<void> {
   try {
-    await app.db.query(
-      `INSERT INTO audit_logs (action, actor_user_id, api_key_id, source_app, memory_id, scope_id, org_id, details)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [
-        event.action,
-        event.actorUserId ?? null,
-        event.apiKeyId ?? null,
-        event.sourceApp ?? 'dashboard',
-        event.memoryId ?? null,
-        event.scopeId ?? null,
-        event.orgId ?? null,
-        JSON.stringify(event.details ?? {}),
-      ],
-    );
+    await app.db.insert(auditLogs).values({
+      action: event.action,
+      actorUserId: event.actorUserId ?? null,
+      apiKeyId: event.apiKeyId ?? null,
+      sourceApp: event.sourceApp ?? 'dashboard',
+      memoryId: event.memoryId ?? null,
+      scopeId: event.scopeId ?? null,
+      orgId: event.orgId ?? null,
+      details: event.details ?? {},
+    });
   } catch (err) {
     app.log.error({ err }, 'failed to write audit log');
   }
@@ -40,58 +39,79 @@ interface AuditQuery {
   action?: string;
 }
 
-function mapEntry(row: any): AuditEntry {
+interface AuditRow {
+  id: bigint;
+  occurredAt: Date;
+  action: string;
+  actorUserId: string | null;
+  actorName: string | null;
+  apiKeyName: string | null;
+  sourceApp: string;
+  memoryId: string | null;
+  scopeId: string | null;
+  orgId: string | null;
+  details: unknown;
+}
+
+function mapEntry(row: AuditRow): AuditEntry {
   return {
     id: String(row.id),
-    occurredAt: row.occurred_at.toISOString(),
+    occurredAt: row.occurredAt.toISOString(),
     action: row.action,
-    actorUserId: row.actor_user_id,
-    actorName: row.actor_name ?? null,
-    apiKeyName: row.api_key_name ?? null,
-    sourceApp: row.source_app,
-    memoryId: row.memory_id,
-    scopeId: row.scope_id,
-    orgId: row.org_id,
-    details: row.details ?? {},
+    actorUserId: row.actorUserId,
+    actorName: row.actorName ?? null,
+    apiKeyName: row.apiKeyName ?? null,
+    sourceApp: row.sourceApp,
+    memoryId: row.memoryId,
+    scopeId: row.scopeId,
+    orgId: row.orgId,
+    details: (row.details as Record<string, unknown>) ?? {},
   };
 }
 
-const BASE_SELECT = `
-  SELECT a.*, u.name AS actor_name, k.name AS api_key_name
-  FROM audit_logs a
-  LEFT JOIN users u ON u.id = a.actor_user_id
-  LEFT JOIN api_keys k ON k.id = a.api_key_id`;
-
 async function listAudit(
   app: AppContext,
-  filterColumn: 'a.actor_user_id' | 'a.org_id',
+  filterColumn: PgColumn,
   filterValue: string,
   q: AuditQuery,
 ): Promise<AuditListResponse> {
-  const params: unknown[] = [filterValue];
-  let where = `WHERE ${filterColumn} = $1`;
-  if (q.action) {
-    params.push(`%${q.action}%`);
-    where += ` AND a.action ILIKE $${params.length}`;
-  }
-  const countParams = [...params];
-  params.push(q.limit, q.offset);
-  const [total, { rows }] = await Promise.all([
-    app.db.query(`SELECT count(*)::int AS n FROM audit_logs a ${where}`, countParams),
-    app.db.query(
-      `${BASE_SELECT} ${where} ORDER BY a.occurred_at DESC, a.id DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
-      params,
-    ),
+  const where = and(
+    eq(filterColumn, filterValue),
+    q.action ? ilike(auditLogs.action, `%${q.action}%`) : undefined,
+  );
+  const [totalRes, rows] = await Promise.all([
+    app.db.select({ n: count() }).from(auditLogs).where(where),
+    app.db
+      .select({
+        id: auditLogs.id,
+        occurredAt: auditLogs.occurredAt,
+        action: auditLogs.action,
+        actorUserId: auditLogs.actorUserId,
+        sourceApp: auditLogs.sourceApp,
+        memoryId: auditLogs.memoryId,
+        scopeId: auditLogs.scopeId,
+        orgId: auditLogs.orgId,
+        details: auditLogs.details,
+        actorName: users.name,
+        apiKeyName: apiKeys.name,
+      })
+      .from(auditLogs)
+      .leftJoin(users, eq(users.id, auditLogs.actorUserId))
+      .leftJoin(apiKeys, eq(apiKeys.id, auditLogs.apiKeyId))
+      .where(where)
+      .orderBy(desc(auditLogs.occurredAt), desc(auditLogs.id))
+      .limit(q.limit)
+      .offset(q.offset),
   ]);
-  return { entries: rows.map(mapEntry), total: total.rows[0].n };
+  return { entries: rows.map(mapEntry), total: totalRes[0].n };
 }
 
 /** Events where the given user is the actor. */
 export function listUserAudit(app: AppContext, userId: string, q: AuditQuery): Promise<AuditListResponse> {
-  return listAudit(app, 'a.actor_user_id', userId, q);
+  return listAudit(app, auditLogs.actorUserId, userId, q);
 }
 
 /** Org-scoped events only — personal memories never carry an org_id, so they never show here. */
 export function listOrgAudit(app: AppContext, orgId: string, q: AuditQuery): Promise<AuditListResponse> {
-  return listAudit(app, 'a.org_id', orgId, q);
+  return listAudit(app, auditLogs.orgId, orgId, q);
 }

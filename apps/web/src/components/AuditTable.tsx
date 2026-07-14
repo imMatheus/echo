@@ -1,9 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { ChevronRightIcon, ScrollTextIcon } from 'lucide-react';
-import { toast } from 'sonner';
 import type { AuditEntry, AuditListResponse } from '@echo/shared';
 import type { AuditQuery } from '../api';
-import { errorMessage } from '../api';
+import { useAudit } from '@/hooks';
 import { SourceChip } from './Badge';
 import { EmptyState } from './EmptyState';
 import { PageLoading } from './PageLoading';
@@ -39,44 +38,33 @@ function DetailsRow({ entry }: { entry: AuditEntry }) {
 
 /**
  * Paginated audit table with an action-substring filter and per-row details
- * expander. `fetchPage` points it at /audit or /orgs/:id/audit.
+ * expander. `fetchPage` points it at /audit or /orgs/:id/audit; `scopeKey`
+ * distinguishes those sources in the SWR cache.
  */
 export function AuditTable({
   fetchPage,
+  scopeKey,
 }: {
   fetchPage: (q: AuditQuery) => Promise<AuditListResponse>;
+  scopeKey: string;
 }) {
-  const [entries, setEntries] = useState<AuditEntry[] | null>(null);
-  const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
   const [action, setAction] = useState('');
-  const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
 
   // Only the typed action filter is debounced; pagination fetches immediately.
   const debouncedAction = useDebouncedValue(action);
 
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    fetchPage({ limit: PAGE_SIZE, offset, action: debouncedAction.trim() || undefined })
-      .then((res) => {
-        if (cancelled) return;
-        setEntries(res.entries);
-        setTotal(res.total);
-      })
-      .catch((err) => {
-        if (!cancelled) toast.error(errorMessage(err));
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [fetchPage, offset, debouncedAction]);
+  const { data, isLoading, isValidating } = useAudit(scopeKey, fetchPage, {
+    limit: PAGE_SIZE,
+    offset,
+    action: debouncedAction.trim() || undefined,
+  });
+  const entries: AuditEntry[] | null = data?.entries ?? null;
+  const total = data?.total ?? 0;
+  const loading = isValidating;
 
-  if (entries === null && loading) return <PageLoading />;
+  if (entries === null && isLoading) return <PageLoading />;
 
   return (
     <div>

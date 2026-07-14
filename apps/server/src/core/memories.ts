@@ -8,6 +8,9 @@ import type {
   SearchMemoriesResponse,
   UpdateMemoryRequest,
 } from '@echo/shared';
+import { and, count, desc, eq, ilike, inArray, isNotNull, isNull, type SQL, sql } from 'drizzle-orm';
+import type { PgUpdateSetSource } from 'drizzle-orm/pg-core';
+import { memories, scopes, sessions, users } from '@/db/schema';
 import { toVectorLiteral } from '@/lib/embeddings';
 import { forbidden, notFound } from '@/lib/http-error';
 import type { AppContext, AuthContext } from '@/types';
@@ -30,6 +33,10 @@ interface MemoryRow extends Record<string, any> {
   scope_org_id: string | null;
 }
 
+// The query builder returns Date objects; raw `db.execute` (the hybrid-search CTE)
+// returns timestamps as strings — normalize both to an ISO string.
+const toIso = (v: Date | string): string => (v instanceof Date ? v : new Date(v)).toISOString();
+
 function mapMemory(row: MemoryRow): Memory {
   return {
     id: row.id,
@@ -38,7 +45,7 @@ function mapMemory(row: MemoryRow): Memory {
     scopeName: row.scope_name,
     content: row.content,
     kind: row.kind,
-    confidence: row.confidence,
+    confidence: Number(row.confidence),
     sensitivity: row.sensitivity,
     sourceApp: row.source_app,
     tags: row.tags ?? [],
@@ -46,11 +53,38 @@ function mapMemory(row: MemoryRow): Memory {
     createdBy: row.created_by,
     createdByName: row.created_by_name ?? null,
     embeddingModel: row.embedding_model,
-    expiresAt: row.expires_at ? row.expires_at.toISOString() : null,
-    createdAt: row.created_at.toISOString(),
-    updatedAt: row.updated_at.toISOString(),
+    expiresAt: row.expires_at ? toIso(row.expires_at) : null,
+    createdAt: toIso(row.created_at),
+    updatedAt: toIso(row.updated_at),
   };
 }
+
+// Column set shared by the query-builder reads (fetch/list). Snake_case keys keep
+// the shape mapMemory already expects.
+const memorySelect = {
+  id: memories.id,
+  scope_id: memories.scopeId,
+  content: memories.content,
+  kind: memories.kind,
+  confidence: memories.confidence,
+  sensitivity: memories.sensitivity,
+  source_app: memories.sourceApp,
+  tags: memories.tags,
+  metadata: memories.metadata,
+  created_by: memories.createdBy,
+  embedding_model: memories.embeddingModel,
+  expires_at: memories.expiresAt,
+  created_at: memories.createdAt,
+  updated_at: memories.updatedAt,
+  scope_type: scopes.type,
+  scope_name: scopes.name,
+  scope_org_id: scopes.orgId,
+  created_by_name: users.name,
+} as const;
+
+/** `deleted_at IS NULL AND not expired` as a query-builder condition. */
+const notGone = (): SQL =>
+  sql`${memories.deletedAt} IS NULL AND (${memories.expiresAt} IS NULL OR ${memories.expiresAt} > now())`;
 
 /** Embedding failures must never fail a write — the memory is stored without a vector. */
 async function embedBestEffort(app: AppContext, text: string): Promise<{ vector: string; model: string } | null> {
@@ -76,29 +110,25 @@ export async function createMemory(app: AppContext, ctx: AuthContext, input: Cre
   if (!scope.canWrite) throw forbidden('You cannot write to this scope');
 
   const embedded = await embedBestEffort(app, input.content);
-  const { rows } = await app.db.query(
-    `INSERT INTO memories
-       (scope_id, content, kind, confidence, sensitivity, source_app, tags, metadata,
-        created_by, api_key_id, embedding, embedding_model, expires_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::vector, $12, $13)
-     RETURNING id`,
-    [
-      scope.id,
-      input.content,
-      input.kind ?? 'explicit',
-      input.confidence ?? 1,
-      input.sensitivity ?? 'normal',
-      input.sourceApp?.trim() || ctx.sourceApp,
-      input.tags ?? [],
-      JSON.stringify(input.metadata ?? {}),
-      ctx.userId,
-      ctx.apiKeyId,
-      embedded?.vector ?? null,
-      embedded?.model ?? null,
-      input.expiresAt ?? null,
-    ],
-  );
-  const memory = await fetchMemory(app, rows[0].id);
+  const [created] = await app.db
+    .insert(memories)
+    .values({
+      scopeId: scope.id,
+      content: input.content,
+      kind: input.kind ?? 'explicit',
+      confidence: input.confidence ?? 1,
+      sensitivity: input.sensitivity ?? 'normal',
+      sourceApp: input.sourceApp?.trim() || ctx.sourceApp,
+      tags: input.tags ?? [],
+      metadata: input.metadata ?? {},
+      createdBy: ctx.userId,
+      apiKeyId: ctx.apiKeyId,
+      embedding: embedded ? sql`${embedded.vector}::vector` : null,
+      embeddingModel: embedded?.model ?? null,
+      expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
+    })
+    .returning({ id: memories.id });
+  const memory = await fetchMemory(app, created.id);
   await logAudit(app, {
     action: 'memory.create',
     actorUserId: ctx.userId,
@@ -113,12 +143,15 @@ export async function createMemory(app: AppContext, ctx: AuthContext, input: Cre
 }
 
 async function fetchMemory(app: AppContext, id: string): Promise<Memory> {
-  const { rows } = await app.db.query(
-    `SELECT ${MEMORY_COLS} FROM memories m ${MEMORY_JOINS} WHERE m.id = $1 AND m.deleted_at IS NULL`,
-    [id],
-  );
-  if (!rows[0]) throw notFound('Memory not found');
-  return mapMemory(rows[0]);
+  const [row] = await app.db
+    .select(memorySelect)
+    .from(memories)
+    .innerJoin(scopes, eq(scopes.id, memories.scopeId))
+    .leftJoin(users, eq(users.id, memories.createdBy))
+    .where(and(eq(memories.id, id), isNull(memories.deletedAt)))
+    .limit(1);
+  if (!row) throw notFound('Memory not found');
+  return mapMemory(row);
 }
 
 /** Memory + the caller's access to its scope; 404 when either is missing. */
@@ -166,43 +199,27 @@ export async function listMemories(
   }
   if (scopeIds.length === 0) return { memories: [], total: 0 };
 
-  const params: unknown[] = [scopeIds];
-  const conditions = [`m.scope_id = ANY($1::uuid[])`, NOT_GONE];
-  if (query.q) {
-    params.push(`%${query.q}%`);
-    conditions.push(`m.content ILIKE $${params.length}`);
-  }
-  if (query.kind) {
-    params.push(query.kind);
-    conditions.push(`m.kind = $${params.length}`);
-  }
-  if (query.sensitivity) {
-    params.push(query.sensitivity);
-    conditions.push(`m.sensitivity = $${params.length}`);
-  }
-  if (query.sourceApp) {
-    params.push(query.sourceApp);
-    conditions.push(`m.source_app = $${params.length}`);
-  }
-  if (query.tag) {
-    params.push(query.tag);
-    conditions.push(`$${params.length} = ANY(m.tags)`);
-  }
-  const where = conditions.join(' AND ');
+  const conditions: SQL[] = [inArray(memories.scopeId, scopeIds), notGone()];
+  if (query.q) conditions.push(ilike(memories.content, `%${query.q}%`));
+  if (query.kind) conditions.push(eq(memories.kind, query.kind));
+  if (query.sensitivity) conditions.push(eq(memories.sensitivity, query.sensitivity));
+  if (query.sourceApp) conditions.push(eq(memories.sourceApp, query.sourceApp));
+  if (query.tag) conditions.push(sql`${query.tag} = ANY(${memories.tags})`);
+  const where = and(...conditions);
   const limit = Math.min(Math.max(query.limit ?? 50, 1), 200);
   const offset = Math.max(query.offset ?? 0, 0);
 
-  const countParams = [...params];
-  params.push(limit, offset);
-  const [totalRes, { rows }] = await Promise.all([
-    app.db.query(`SELECT count(*)::int AS n FROM memories m WHERE ${where}`, countParams),
-    app.db.query(
-      `SELECT ${MEMORY_COLS} FROM memories m ${MEMORY_JOINS}
-       WHERE ${where}
-       ORDER BY m.created_at DESC
-       LIMIT $${params.length - 1} OFFSET $${params.length}`,
-      params,
-    ),
+  const [totalRes, rows] = await Promise.all([
+    app.db.select({ n: count() }).from(memories).where(where),
+    app.db
+      .select(memorySelect)
+      .from(memories)
+      .innerJoin(scopes, eq(scopes.id, memories.scopeId))
+      .leftJoin(users, eq(users.id, memories.createdBy))
+      .where(where)
+      .orderBy(desc(memories.createdAt))
+      .limit(limit)
+      .offset(offset),
   ]);
 
   if (ctx.via === 'api_key') {
@@ -216,7 +233,7 @@ export async function listMemories(
       details: { count: rows.length, filters: { scopeId: query.scopeId, kind: query.kind, tag: query.tag } },
     });
   }
-  return { memories: rows.map(mapMemory), total: totalRes.rows[0].n };
+  return { memories: rows.map(mapMemory), total: totalRes[0].n };
 }
 
 const RRF_K = 60;
@@ -240,27 +257,30 @@ export async function searchMemories(
 
   const embedded = await embedBestEffort(app, req.query);
   let rows: MemoryRow[];
+  // Bind the scope ids as a single Postgres array literal: interpolating a JS array
+  // into a raw `sql` template spreads it into separate params, which breaks `= ANY(...)`.
+  const scopeArray = `{${scopeIds.join(',')}}`;
 
   // OR-semantics tsquery: recall queries are descriptions of what's needed, not
   // exact phrases, so any-term matching with rank ordering beats plainto's AND.
-  const TSQ = `
-    SELECT CASE WHEN plainto_tsquery('english', %Q)::text = '' THEN NULL
-                ELSE to_tsquery('english', replace(plainto_tsquery('english', %Q)::text, ' & ', ' | '))
+  const tsq = (q: string): SQL => sql`
+    SELECT CASE WHEN plainto_tsquery('english', ${q})::text = '' THEN NULL
+                ELSE to_tsquery('english', replace(plainto_tsquery('english', ${q})::text, ' & ', ' | '))
            END AS tsq`;
 
   if (embedded) {
-    const { rows: r } = await app.db.query(
-      `WITH q AS (${TSQ.replaceAll('%Q', '$4')}),
+    const result = await app.db.execute(
+      sql`WITH q AS (${tsq(req.query)}),
        base AS (
          SELECT m.id, m.embedding, m.embedding_model, m.tsv FROM memories m
-         WHERE m.scope_id = ANY($1::uuid[]) AND ${NOT_GONE}
+         WHERE m.scope_id = ANY(${scopeArray}::uuid[]) AND ${sql.raw(NOT_GONE)}
        ),
        vec AS (
-         SELECT id, (1 - (embedding <=> $2::vector))::float8 AS similarity,
-                row_number() OVER (ORDER BY embedding <=> $2::vector) AS rnk
+         SELECT id, (1 - (embedding <=> ${embedded.vector}::vector))::float8 AS similarity,
+                row_number() OVER (ORDER BY embedding <=> ${embedded.vector}::vector) AS rnk
          FROM base
-         WHERE embedding IS NOT NULL AND embedding_model = $3
-         ORDER BY embedding <=> $2::vector
+         WHERE embedding IS NOT NULL AND embedding_model = ${embedded.model}
+         ORDER BY embedding <=> ${embedded.vector}::vector
          LIMIT ${CANDIDATES}
        ),
        fts AS (
@@ -276,37 +296,35 @@ export async function searchMemories(
                 v.similarity
          FROM vec v FULL OUTER JOIN fts f ON f.id = v.id
        )
-       SELECT ${MEMORY_COLS}, mg.score, mg.similarity
-       FROM merged mg JOIN memories m ON m.id = mg.id ${MEMORY_JOINS}
+       SELECT ${sql.raw(MEMORY_COLS)}, mg.score, mg.similarity
+       FROM merged mg JOIN memories m ON m.id = mg.id ${sql.raw(MEMORY_JOINS)}
        ORDER BY mg.score DESC, m.created_at DESC
-       LIMIT $5`,
-      [scopeIds, embedded.vector, embedded.model, req.query, limit],
+       LIMIT ${limit}`,
     );
-    rows = r;
+    rows = result.rows as MemoryRow[];
   } else {
-    const { rows: r } = await app.db.query(
-      `WITH q AS (${TSQ.replaceAll('%Q', '$2')}),
+    const result = await app.db.execute(
+      sql`WITH q AS (${tsq(req.query)}),
        fts AS (
          SELECT m.id, row_number() OVER (ORDER BY ts_rank_cd(m.tsv, q.tsq) DESC, m.id) AS rnk
          FROM memories m, q
-         WHERE m.scope_id = ANY($1::uuid[]) AND ${NOT_GONE}
+         WHERE m.scope_id = ANY(${scopeArray}::uuid[]) AND ${sql.raw(NOT_GONE)}
            AND q.tsq IS NOT NULL AND m.tsv @@ q.tsq
          ORDER BY ts_rank_cd(m.tsv, q.tsq) DESC
          LIMIT ${CANDIDATES}
        )
-       SELECT ${MEMORY_COLS}, (1.0 / (${RRF_K} + fts.rnk))::float8 AS score, NULL::float8 AS similarity
-       FROM fts JOIN memories m ON m.id = fts.id ${MEMORY_JOINS}
+       SELECT ${sql.raw(MEMORY_COLS)}, (1.0 / (${RRF_K} + fts.rnk))::float8 AS score, NULL::float8 AS similarity
+       FROM fts JOIN memories m ON m.id = fts.id ${sql.raw(MEMORY_JOINS)}
        ORDER BY fts.rnk
-       LIMIT $3`,
-      [scopeIds, req.query, limit],
+       LIMIT ${limit}`,
     );
-    rows = r;
+    rows = result.rows as MemoryRow[];
   }
 
   const results: MemorySearchResult[] = rows.map((row) => ({
     ...mapMemory(row),
-    score: row.score,
-    similarity: row.similarity ?? null,
+    score: Number(row.score),
+    similarity: row.similarity == null ? null : Number(row.similarity),
   }));
 
   // Actor-level audit keeps the query; per-org rows omit it (queries can carry
@@ -365,31 +383,24 @@ export async function updateMemory(
     targetScope = next;
   }
 
-  const sets: string[] = ['updated_at = now()'];
-  const params: unknown[] = [];
-  const push = (fragment: string, value: unknown) => {
-    params.push(value);
-    sets.push(`${fragment} $${params.length}`);
-  };
-
+  const set: PgUpdateSetSource<typeof memories> = { updatedAt: sql`now()` };
   if (input.content !== undefined && input.content !== memory.content) {
-    push('content =', input.content);
+    set.content = input.content;
     const embedded = await embedBestEffort(app, input.content);
-    push('embedding =', embedded?.vector ?? null);
-    sets[sets.length - 1] += '::vector';
-    push('embedding_model =', embedded?.model ?? null);
+    set.embedding = embedded ? sql`${embedded.vector}::vector` : null;
+    set.embeddingModel = embedded?.model ?? null;
   }
-  if (input.kind !== undefined) push('kind =', input.kind);
-  if (input.confidence !== undefined) push('confidence =', input.confidence);
-  if (input.sensitivity !== undefined) push('sensitivity =', input.sensitivity);
-  if (input.tags !== undefined) push('tags =', input.tags);
-  if (input.metadata !== undefined) push('metadata =', JSON.stringify(input.metadata));
-  if (input.expiresAt !== undefined) push('expires_at =', input.expiresAt);
-  if (targetScope.id !== memory.scopeId) push('scope_id =', targetScope.id);
+  if (input.kind !== undefined) set.kind = input.kind;
+  if (input.confidence !== undefined) set.confidence = input.confidence;
+  if (input.sensitivity !== undefined) set.sensitivity = input.sensitivity;
+  if (input.tags !== undefined) set.tags = input.tags;
+  if (input.metadata !== undefined) set.metadata = input.metadata;
+  if (input.expiresAt !== undefined) set.expiresAt = input.expiresAt ? new Date(input.expiresAt) : null;
+  if (targetScope.id !== memory.scopeId) set.scopeId = targetScope.id;
 
-  if (sets.length === 1) return memory;
-  params.push(id);
-  await app.db.query(`UPDATE memories SET ${sets.join(', ')} WHERE id = $${params.length}`, params);
+  // Only updated_at present → nothing actually changed.
+  if (Object.keys(set).length === 1) return memory;
+  await app.db.update(memories).set(set).where(eq(memories.id, id));
 
   const updated = await fetchMemory(app, id);
   await logAudit(app, {
@@ -410,7 +421,10 @@ export async function deleteMemory(app: AppContext, ctx: AuthContext, id: string
   if (!canModify(ctx, memory, scope)) {
     throw forbidden('Only the memory creator or a scope manager can delete this memory');
   }
-  await app.db.query('UPDATE memories SET deleted_at = now(), updated_at = now() WHERE id = $1', [id]);
+  await app.db
+    .update(memories)
+    .set({ deletedAt: sql`now()`, updatedAt: sql`now()` })
+    .where(eq(memories.id, id));
   await logAudit(app, {
     action: 'memory.delete',
     actorUserId: ctx.userId,
@@ -425,9 +439,12 @@ export async function deleteMemory(app: AppContext, ctx: AuthContext, id: string
 
 /** Housekeeping: soft-delete expired memories, purge soft-deleted rows after 30 days. */
 export async function sweepMemories(app: AppContext): Promise<void> {
-  await app.db.query(
-    `UPDATE memories SET deleted_at = now() WHERE expires_at IS NOT NULL AND expires_at <= now() AND deleted_at IS NULL`,
-  );
-  await app.db.query(`DELETE FROM memories WHERE deleted_at IS NOT NULL AND deleted_at < now() - interval '30 days'`);
-  await app.db.query(`DELETE FROM sessions WHERE expires_at < now()`);
+  await app.db
+    .update(memories)
+    .set({ deletedAt: sql`now()` })
+    .where(and(isNotNull(memories.expiresAt), sql`${memories.expiresAt} <= now()`, isNull(memories.deletedAt)));
+  await app.db
+    .delete(memories)
+    .where(and(isNotNull(memories.deletedAt), sql`${memories.deletedAt} < now() - interval '30 days'`));
+  await app.db.delete(sessions).where(sql`${sessions.expiresAt} < now()`);
 }

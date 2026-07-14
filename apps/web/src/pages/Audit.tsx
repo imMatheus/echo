@@ -13,7 +13,7 @@ export default function AuditPage() {
         title="Audit Log"
         subtitle="Every action taken by you or your API keys — writes, recalls, and changes."
       />
-      <AuditTable fetchPage={fetchPage} />
+      <AuditTable fetchPage={fetchPage} scopeKey="personal" />
     </div>
   );
 }

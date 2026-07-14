@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { LayersIcon } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import type { Memory } from '@echo/shared';
 import * as api from '@/api';
 import { ApiRequestError, errorMessage } from '@/api';
+import { useMemory, useRevalidateMemories } from '@/hooks';
 import { KindBadge, ScopeBadge, SensitivityBadge, SourceChip, Tag } from '@/components/Badge';
 import { CopyButton } from '@/components/CodeBlock';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
@@ -33,9 +33,9 @@ export default function MemoryDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
-  const [memory, setMemory] = useState<Memory | null>(null);
-  const [notFound, setNotFound] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const { data: memory, error, isLoading, mutate } = useMemory(id);
+  const revalidateMemories = useRevalidateMemories();
+  const notFound = error instanceof ApiRequestError && error.status === 404;
 
   // content editing
   const [editing, setEditing] = useState(false);
@@ -49,29 +49,7 @@ export default function MemoryDetailPage() {
 
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  useEffect(() => {
-    if (!id) return;
-    let cancelled = false;
-    setLoading(true);
-    api
-      .getMemory(id)
-      .then((res) => {
-        if (!cancelled) setMemory(res.memory);
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        if (err instanceof ApiRequestError && err.status === 404) setNotFound(true);
-        else toast.error(errorMessage(err));
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [id]);
-
-  if (loading) return <PageLoading />;
+  if (isLoading) return <PageLoading />;
 
   if (notFound || !memory) {
     return (
@@ -102,7 +80,8 @@ export default function MemoryDetailPage() {
     setSaving(true);
     try {
       const res = await api.updateMemory(memory.id, { content });
-      setMemory(res.memory);
+      await mutate(res.memory, { revalidate: false });
+      revalidateMemories();
       setEditing(false);
       toast.success('Memory updated');
     } catch (err) {
@@ -125,7 +104,8 @@ export default function MemoryDetailPage() {
     setSavingTags(true);
     try {
       const res = await api.updateMemory(memory.id, { tags });
-      setMemory(res.memory);
+      await mutate(res.memory, { revalidate: false });
+      revalidateMemories();
       setEditingTags(false);
       toast.success('Tags updated');
     } catch (err) {
@@ -139,6 +119,7 @@ export default function MemoryDetailPage() {
     try {
       await api.deleteMemory(memory.id);
       toast.success('Memory deleted');
+      revalidateMemories();
       navigate('/');
     } catch (err) {
       toast.error(errorMessage(err));

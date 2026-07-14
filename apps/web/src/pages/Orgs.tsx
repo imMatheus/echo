@@ -1,12 +1,13 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { Building2Icon, PlusIcon } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
-import type { OrganizationWithRole } from '@echo/shared';
 import { slugify } from '@echo/shared';
 import * as api from '@/api';
 import { errorMessage } from '@/api';
+import { keys, useOrgs } from '@/hooks';
 import { RoleBadge } from '@/components/Badge';
 import { EmptyState } from '@/components/EmptyState';
 import { PageHeader } from '@/components/PageHeader';
@@ -25,19 +26,8 @@ import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
 
 export default function OrgsPage() {
-  const [orgs, setOrgs] = useState<OrganizationWithRole[] | null>(null);
+  const { data: orgs } = useOrgs();
   const [showCreate, setShowCreate] = useState(false);
-
-  const load = useCallback(() => {
-    api
-      .listOrgs()
-      .then((res) => setOrgs(res.orgs))
-      .catch((err) => toast.error(errorMessage(err)));
-  }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
 
   return (
     <div>
@@ -52,7 +42,7 @@ export default function OrgsPage() {
         }
       />
 
-      {orgs === null ? (
+      {!orgs ? (
         <PageLoading />
       ) : orgs.length === 0 ? (
         <EmptyState
@@ -93,6 +83,7 @@ export default function OrgsPage() {
 
 function CreateOrgModal({ onClose }: { onClose: () => void }) {
   const navigate = useNavigate();
+  const { mutate } = useSWRConfig();
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
   const [slugTouched, setSlugTouched] = useState(false);
@@ -118,6 +109,7 @@ function CreateOrgModal({ onClose }: { onClose: () => void }) {
         name: name.trim(),
         slug: slug.trim() || undefined,
       });
+      void mutate(keys.orgs);
       toast.success(`Created ${res.org.name}`);
       navigate(`/orgs/${res.org.id}`);
     } catch (err) {

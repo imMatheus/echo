@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
-import type { ServerMeta } from '@echo/shared';
 import * as api from '../api';
 import { errorMessage } from '../api';
 import { useAuth } from '../auth';
+import { useMeta } from '@/hooks';
 import { AuthLayout } from './Login';
 import { Alert, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -20,25 +20,16 @@ import { Spinner } from '@/components/ui/spinner';
 export default function SignupPage() {
   const { user, loading, refresh } = useAuth();
   const navigate = useNavigate();
-  const [meta, setMeta] = useState<ServerMeta | null>(null);
+  const { data: meta } = useMeta();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    api
-      .getMeta()
-      .then(setMeta)
-      .catch(() => {
-        // decorative
-      });
-  }, []);
-
   if (!loading && user) return <Navigate to="/" replace />;
 
-  const signupDisabled = meta !== null && !meta.signupEnabled;
+  const signupDisabled = meta != null && !meta.signupEnabled;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();

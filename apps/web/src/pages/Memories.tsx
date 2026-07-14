@@ -1,32 +1,13 @@
-import { useEffect, useState } from 'react';
-import { toast } from 'sonner';
-import type { ScopeWithAccess } from '@echo/shared';
-import * as api from '@/api';
-import { errorMessage } from '@/api';
 import { useAuth } from '@/auth';
 import { MemoryBrowser } from '@/components/MemoryBrowser';
 import { PageLoading } from '@/components/PageLoading';
+import { useScopes } from '@/hooks';
 
 export default function MemoriesPage() {
   const { personalScopeId } = useAuth();
-  const [scopes, setScopes] = useState<ScopeWithAccess[] | null>(null);
+  const { data: scopes } = useScopes();
 
-  useEffect(() => {
-    let cancelled = false;
-    api
-      .listScopes()
-      .then((res) => {
-        if (!cancelled) setScopes(res.scopes);
-      })
-      .catch((err) => {
-        if (!cancelled) toast.error(errorMessage(err));
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  if (scopes === null) return <PageLoading />;
+  if (!scopes) return <PageLoading />;
 
   return (
     <MemoryBrowser

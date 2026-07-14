@@ -1,7 +1,9 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useMemo } from 'react';
 import type { ReactNode } from 'react';
+import useSWR, { useSWRConfig } from 'swr';
 import type { User } from '@echo/shared';
 import * as api from './api';
+import { keys } from './hooks';
 
 interface AuthContextValue {
   user: User | null;
@@ -16,24 +18,16 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [personalScopeId, setPersonalScopeId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { mutate: globalMutate } = useSWRConfig();
+  // An unauthenticated visitor gets a 401 here — an expected "no user" state,
+  // not an error to surface or retry.
+  const { data, isLoading, mutate } = useSWR(keys.me, () => api.me(), {
+    shouldRetryOnError: false,
+  });
 
   const refresh = useCallback(async () => {
-    try {
-      const res = await api.me();
-      setUser(res.user);
-      setPersonalScopeId(res.personalScopeId);
-    } catch {
-      setUser(null);
-      setPersonalScopeId(null);
-    }
-  }, []);
-
-  useEffect(() => {
-    void refresh().finally(() => setLoading(false));
-  }, [refresh]);
+    await mutate();
+  }, [mutate]);
 
   const logout = useCallback(async () => {
     try {
@@ -41,13 +35,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       // clearing local state is enough if the server call fails
     }
-    setUser(null);
-    setPersonalScopeId(null);
-  }, []);
+    // Drop the whole cache so nothing from this session leaks into the next.
+    await globalMutate(() => true, undefined, { revalidate: false });
+  }, [globalMutate]);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ user, personalScopeId, loading, refresh, logout }),
-    [user, personalScopeId, loading, refresh, logout],
+    () => ({
+      user: data?.user ?? null,
+      personalScopeId: data?.personalScopeId ?? null,
+      loading: isLoading,
+      refresh,
+      logout,
+    }),
+    [data, isLoading, refresh, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
