@@ -58,7 +58,7 @@ export default function MemoryDetailPage() {
         title="Memory not found"
         description="This memory may have been deleted or expired."
         action={
-          <Link to="/" className={cn(buttonVariants({ variant: 'outline' }))}>
+          <Link to="/memories" className={cn(buttonVariants({ variant: 'outline' }))}>
             Back to memories
           </Link>
         }
@@ -120,7 +120,7 @@ export default function MemoryDetailPage() {
       await api.deleteMemory(memory.id);
       toast.success('Memory deleted');
       revalidateMemories();
-      navigate('/');
+      navigate('/memories');
     } catch (err) {
       toast.error(errorMessage(err));
       throw err;
@@ -134,7 +134,7 @@ export default function MemoryDetailPage() {
       <PageHeader
         title="Memory"
         backLink={
-          <Link to="/" className="text-xs text-muted-foreground hover:text-foreground">
+          <Link to="/memories" className="text-xs text-muted-foreground hover:text-foreground">
             ← Memories
           </Link>
         }

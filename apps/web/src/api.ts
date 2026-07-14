@@ -28,6 +28,8 @@ import type {
   SearchMemoriesResponse,
   ServerMeta,
   SignupRequest,
+  StatsRange,
+  StatsResponse,
   UpdateMemoryRequest,
   User,
 } from '@echo/shared';
@@ -300,4 +302,12 @@ export function getAudit(q: AuditQuery = {}): Promise<AuditListResponse> {
   return request<AuditListResponse>('/audit', {
     query: { limit: q.limit, offset: q.offset, action: q.action },
   });
+}
+
+// ---------------------------------------------------------------------------
+// Usage stats
+// ---------------------------------------------------------------------------
+
+export function getStats(range: StatsRange): Promise<StatsResponse> {
+  return request<StatsResponse>('/stats', { query: { range } });
 }

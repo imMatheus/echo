@@ -9,6 +9,7 @@ import { Toaster } from '@/components/ui/sonner';
 import ApiKeysPage from './pages/ApiKeys';
 import AuditPage from './pages/Audit';
 import ConnectPage from './pages/Connect';
+import HomePage from './pages/Home';
 import LoginPage from './pages/Login';
 import MemoriesPage from './pages/Memories';
 import MemoryDetailPage from './pages/MemoryDetail';
@@ -54,7 +55,8 @@ export default function App() {
                   </RequireAuth>
                 }
               >
-                <Route path="/" element={<MemoriesPage />} />
+                <Route path="/" element={<HomePage />} />
+                <Route path="/memories" element={<MemoriesPage />} />
                 <Route path="/memories/:id" element={<MemoryDetailPage />} />
                 <Route path="/keys" element={<ApiKeysPage />} />
                 <Route path="/audit" element={<AuditPage />} />

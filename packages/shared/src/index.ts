@@ -261,6 +261,55 @@ export interface AuditListResponse {
   total: number;
 }
 
+// ---------------------------------------------------------------------------
+// Usage stats (home dashboard)
+// ---------------------------------------------------------------------------
+
+export const STATS_RANGES = ['24h', '7d', '30d', '90d'] as const;
+export type StatsRange = (typeof STATS_RANGES)[number];
+
+/**
+ * One time bucket; for 'day' granularity it is "YYYY-MM-DD" (a UTC day),
+ * for 'hour' granularity an ISO instant like "2026-07-14T17:00:00Z".
+ * Buckets with no rows are omitted.
+ */
+export interface TimeBucketCount {
+  bucket: string;
+  count: number;
+}
+
+export interface ActionTimeBucketCount {
+  bucket: string;
+  /** Audit action, e.g. "memory.create", "memory.recall". */
+  action: string;
+  count: number;
+}
+
+export interface SourceAppCount {
+  sourceApp: string;
+  count: number;
+}
+
+export interface UsageStats {
+  range: StatsRange;
+  /** Bucket granularity: 'hour' for the 24h range, 'day' otherwise. */
+  granularity: 'hour' | 'day';
+  /** Every bucket in the range, oldest first, in the TimeBucketCount format. */
+  buckets: string[];
+  /** All-time memory count across every scope the caller can read. */
+  totalMemories: number;
+  /** Memories created per bucket within the range (sparse). */
+  memoriesOverTime: TimeBucketCount[];
+  /** Audit events per bucket per action within the range (sparse). */
+  actionsOverTime: ActionTimeBucketCount[];
+  /** Audit events by source app within the range, most active first. */
+  sourceApps: SourceAppCount[];
+}
+
+export interface StatsResponse {
+  stats: UsageStats;
+}
+
 export interface ApiError {
   error: {
     code:

@@ -120,7 +120,7 @@ const server = new McpServer({ name: 'echo-context', version: '0.1.0' });
 
 server.tool(
   'remember_context',
-  'Store a memory in Echo, the user\'s cross-app context store. Use when the user says "remember ..." (kind=explicit) or when you learn a durable, useful fact about the user, their team, or their projects (kind=inferred, with an honest confidence). Do NOT store secrets, credentials, or trivial conversational details.',
+  'Store a durable fact in Echo so it can be recalled across conversations and AI apps. Call this when the user explicitly asks to remember or save something, or when a stable, useful fact about the user, their preferences, team, or project would clearly improve future work. Use kind="explicit" for facts the user stated or asked to save; use kind="inferred" only for genuine deductions and record an honest confidence. Do not store secrets, credentials, sensitive authentication data, unsupported guesses, or trivial and short-lived conversation details; default to the personal scope unless shared team or organization context is clearly intended.',
   {
     content: z.string().min(1).max(10_000).describe('The memory itself, as a self-contained statement.'),
     scope: z.string().optional().describe('"personal" (default), a scope name (e.g. "Acme/Platform Team"), or a scope id from list_scopes.'),
@@ -151,7 +151,7 @@ server.tool(
 
 server.tool(
   'recall_context',
-  'Search the user\'s Echo memories semantically. Call this at the start of a task to pull in relevant context about the user, their preferences, their team, or the project.',
+  'Search Echo for relevant stored context. Call this before answering any question whose answer may depend on user-specific facts, including identity, relationships, location, preferences, personal history, prior decisions, team knowledge, or project conventions; also call it at the start of a task when saved context could change the result. Use a focused natural-language query describing the facts you need, and prefer this tool over list_context for targeted lookup. Treat an empty result as "no matching memory found," not proof that the fact is false, and do not invent details beyond the returned memories.',
   {
     query: z.string().min(1).max(1000).describe('Natural-language description of what context you need.'),
     scope: z.string().optional().describe('Restrict to one scope by name or id. Default: all accessible scopes.'),
@@ -176,7 +176,7 @@ server.tool(
 
 server.tool(
   'list_context',
-  'List the user\'s Echo memories chronologically (newest first). Prefer recall_context for finding relevant facts.',
+  'Browse Echo memories chronologically, newest first, with optional scope filtering and pagination. Call this when the user asks what Echo knows, wants to review recent or all stored memories, or when a targeted recall is insufficient and chronological browsing is needed. Prefer recall_context for finding a specific fact; avoid listing broad personal context when a narrower search would answer the request.',
   {
     scope: z.string().optional().describe('Scope name or id. Default: all accessible scopes.'),
     limit: z.number().int().min(1).max(100).optional(),
@@ -199,7 +199,7 @@ server.tool(
 
 server.tool(
   'forget_context',
-  'Delete a memory from Echo by id. Use when the user asks to forget something or a stored fact is wrong or obsolete.',
+  'Permanently delete one Echo memory by its exact id. Call this only when the user explicitly asks Echo to forget or delete a stored fact, including when they say a memory is wrong or obsolete; first use recall_context or list_context to identify the exact memory and disambiguate if multiple entries could match. Never delete additional related memories by inference, and do not use this tool merely because a recalled memory seems irrelevant to the current task.',
   {
     memory_id: z.string().uuid().describe('The id of the memory to delete.'),
   },
@@ -212,7 +212,7 @@ server.tool(
 
 server.tool(
   'list_scopes',
-  'List the scopes (personal / organization / team / project / workspace) this user can read and write, with memory counts.',
+  'List every Echo scope the user can access, including personal, organization, workspace, team, and project scopes, with opaque ids and memory counts. Call this when the user asks about available scopes or when remember_context needs a shared destination whose exact name or id is unknown or ambiguous. It is usually unnecessary for personal-memory writes or searches across all accessible scopes; copy returned scope ids exactly and never guess them.',
   {},
   async () =>
     run(async () => {

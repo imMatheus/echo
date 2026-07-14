@@ -73,6 +73,10 @@ Codes: `unauthorized` (401), `forbidden` (403), `not_found` (404), `validation_e
 
 - `GET /audit?limit&offset&action` → `AuditListResponse` — events where the caller is the actor.
 
+## Usage stats
+
+- `GET /stats?range` → `StatsResponse` — home-dashboard numbers. `range` is `24h`, `7d`, `30d` (default), or `90d`. Memory counts cover every scope the caller can read (same boundary as `GET /scopes`); activity counts cover events where the caller is the actor (same boundary as `GET /audit`). The 24h range buckets by hour (ISO instants), the rest by UTC day (`YYYY-MM-DD`); `buckets` lists every bucket in the range so clients don't compute date math.
+
 Note on recall auditing: a `memory.recall` event is written for the actor with the query and result count. When results include org-scoped memories, an additional per-org event is written with the result count and memory ids but **without** the query text (queries can contain personal information).
 
 ## MCP

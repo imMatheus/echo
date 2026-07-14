@@ -10,7 +10,7 @@ import { useCallback } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import type { SWRConfiguration } from 'swr';
 import { toast } from 'sonner';
-import type { ListMemoriesQuery, ListMemoriesResponse } from '@echo/shared';
+import type { ListMemoriesQuery, ListMemoriesResponse, StatsRange } from '@echo/shared';
 import type { AuditQuery } from '@/api';
 import * as api from '@/api';
 import { ApiRequestError, errorMessage } from '@/api';
@@ -39,6 +39,7 @@ export const keys = {
   memories: (query: ListMemoriesQuery) => ['memories', query] as const,
   search: (query: string, scope: string) => ['memories:search', query, scope] as const,
   audit: (scopeKey: string, query: AuditQuery) => ['audit', scopeKey, query] as const,
+  stats: (range: string) => ['stats', range] as const,
 };
 
 /** Matches every browse-list memories key, regardless of scope/kind/filters. */
@@ -128,6 +129,10 @@ export function useAudit(
   query: AuditQuery,
 ) {
   return useSWR(keys.audit(scopeKey, query), () => fetchPage(query), toastOnError);
+}
+
+export function useStats(range: StatsRange) {
+  return useSWR(keys.stats(range), () => api.getStats(range).then((r) => r.stats), toastOnError);
 }
 
 // ---------------------------------------------------------------------------

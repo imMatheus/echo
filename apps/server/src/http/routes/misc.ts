@@ -1,8 +1,10 @@
-import type { ServerMeta } from '@echo/shared';
+import { STATS_RANGES } from '@echo/shared';
+import type { ServerMeta, StatsResponse } from '@echo/shared';
 import { sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { listUserAudit } from '@/core/audit';
+import { getUsageStats } from '@/core/stats';
 import { VERSION } from '@/config';
 import { parse } from '@/lib/validate';
 import type { AppContext } from '@/types';
@@ -12,6 +14,10 @@ const auditQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50),
   offset: z.coerce.number().int().min(0).default(0),
   action: z.string().max(64).optional(),
+});
+
+const statsQuerySchema = z.object({
+  range: z.enum(STATS_RANGES).default('30d'),
 });
 
 export function miscRoutes(app: AppContext) {
@@ -41,6 +47,12 @@ export function miscRoutes(app: AppContext) {
       const ctx = await requireAuth(app, req);
       const query = parse(auditQuerySchema, req.query);
       return listUserAudit(app, ctx.userId, query);
+    });
+
+    f.get('/stats', async (req): Promise<StatsResponse> => {
+      const ctx = await requireAuth(app, req);
+      const { range } = parse(statsQuerySchema, req.query);
+      return { stats: await getUsageStats(app, ctx.userId, range) };
     });
   };
 }
