@@ -5,3 +5,6 @@ dist/
 .env.local
 .DS_Store
 coverage/
+
+# Contains secret MCP API keys
+.mcp.json

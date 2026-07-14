@@ -1,8 +1,32 @@
-import { Building2Icon, KeyRoundIcon, LayersIcon, LogOutIcon, ScrollTextIcon, ZapIcon } from 'lucide-react';
+import {
+  Building2Icon,
+  KeyRoundIcon,
+  LayersIcon,
+  LogOutIcon,
+  MonitorIcon,
+  MoonIcon,
+  ScrollTextIcon,
+  SettingsIcon,
+  SunIcon,
+  ZapIcon,
+} from 'lucide-react';
+import { useTheme } from 'next-themes';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth';
 import { LogoMark } from './icons';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 
 function initials(name: string): string {
@@ -24,6 +48,7 @@ const NAV_ITEMS = [
 export function Layout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const { theme, setTheme } = useTheme();
 
   const onLogout = async () => {
     await logout();
@@ -72,9 +97,45 @@ export function Layout() {
               <div className="truncate text-[11px] text-muted-foreground">{user?.email}</div>
             </div>
           </div>
-          <Button variant="ghost" size="icon" onClick={() => void onLogout()} title="Log out" aria-label="Log out">
-            <LogOutIcon />
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button variant="ghost" size="icon" title="Settings" aria-label="Settings">
+                  <SettingsIcon />
+                </Button>
+              }
+            />
+            <DropdownMenuContent side="top" align="end" className="min-w-44">
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>
+                  <SunIcon className="dark:hidden" />
+                  <MoonIcon className="hidden dark:block" />
+                  Theme
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  <DropdownMenuRadioGroup value={theme} onValueChange={(value) => setTheme(value)}>
+                    <DropdownMenuRadioItem value="light">
+                      <SunIcon />
+                      Light
+                    </DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="dark">
+                      <MoonIcon />
+                      Dark
+                    </DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="system">
+                      <MonitorIcon />
+                      System
+                    </DropdownMenuRadioItem>
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem variant="destructive" onClick={() => void onLogout()}>
+                <LogOutIcon />
+                Log out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </aside>
       <main className="ml-60 min-w-0 flex-1 px-10 pb-16 pt-8 max-md:ml-14 max-md:px-5">

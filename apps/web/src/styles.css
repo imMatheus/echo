@@ -19,7 +19,12 @@
 }
 
 @layer base {
+  /* color-scheme is driven by next-themes (light / dark / system). */
   :root {
+    color-scheme: light;
+  }
+
+  .dark {
     color-scheme: dark;
   }
 

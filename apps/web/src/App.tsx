@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { ThemeProvider } from 'next-themes';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { SWRConfig } from 'swr';
 import { AuthProvider, useAuth } from './auth';
@@ -30,41 +31,43 @@ function RequireAuth({ children }: { children: ReactNode }) {
 
 export default function App() {
   return (
-    <SWRConfig
-      value={{
-        // Match the app's original behaviour: no automatic refetch on window
-        // focus and no error retries. keepPreviousData keeps filtered/paginated
-        // lists on screen (dimmed) while the next page loads.
-        revalidateOnFocus: false,
-        shouldRetryOnError: false,
-        keepPreviousData: true,
-      }}
-    >
-      <BrowserRouter>
-        <AuthProvider>
-          <Routes>
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/signup" element={<SignupPage />} />
-            <Route
-              element={
-                <RequireAuth>
-                  <Layout />
-                </RequireAuth>
-              }
-            >
-              <Route path="/" element={<MemoriesPage />} />
-              <Route path="/memories/:id" element={<MemoryDetailPage />} />
-              <Route path="/keys" element={<ApiKeysPage />} />
-              <Route path="/audit" element={<AuditPage />} />
-              <Route path="/orgs" element={<OrgsPage />} />
-              <Route path="/orgs/:id" element={<OrgDetailPage />} />
-              <Route path="/connect" element={<ConnectPage />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Route>
-          </Routes>
-          <Toaster position="bottom-right" />
-        </AuthProvider>
-      </BrowserRouter>
-    </SWRConfig>
+    <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
+      <SWRConfig
+        value={{
+          // Match the app's original behaviour: no automatic refetch on window
+          // focus and no error retries. keepPreviousData keeps filtered/paginated
+          // lists on screen (dimmed) while the next page loads.
+          revalidateOnFocus: false,
+          shouldRetryOnError: false,
+          keepPreviousData: true,
+        }}
+      >
+        <BrowserRouter>
+          <AuthProvider>
+            <Routes>
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/signup" element={<SignupPage />} />
+              <Route
+                element={
+                  <RequireAuth>
+                    <Layout />
+                  </RequireAuth>
+                }
+              >
+                <Route path="/" element={<MemoriesPage />} />
+                <Route path="/memories/:id" element={<MemoryDetailPage />} />
+                <Route path="/keys" element={<ApiKeysPage />} />
+                <Route path="/audit" element={<AuditPage />} />
+                <Route path="/orgs" element={<OrgsPage />} />
+                <Route path="/orgs/:id" element={<OrgDetailPage />} />
+                <Route path="/connect" element={<ConnectPage />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Route>
+            </Routes>
+            <Toaster position="bottom-right" />
+          </AuthProvider>
+        </BrowserRouter>
+      </SWRConfig>
+    </ThemeProvider>
   );
 }
