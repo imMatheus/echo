@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { createSession, destroySession, getPersonalScopeId, getUserById, login, signup } from '@/core/auth';
 import { HttpError } from '@/lib/http-error';
@@ -7,21 +7,21 @@ import type { AppContext } from '@/types';
 import { requireAuth, SESSION_COOKIE } from '@/http/authn';
 
 const signupSchema = z.object({
-  email: z.string().email().max(254),
+  email: z.string().trim().email().max(254),
   password: z.string().min(8).max(128),
-  name: z.string().min(1).max(100),
+  name: z.string().trim().min(1).max(100),
 });
 
 const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(1),
+  email: z.string().trim().email().max(254),
+  password: z.string().min(1).max(128),
 });
 
 const AUTH_RATE_LIMIT = { rateLimit: { max: 10, timeWindow: '1 minute' } };
 
 export function authRoutes(app: AppContext) {
   return async function routes(f: FastifyInstance) {
-    const setSessionCookie = async (reply: any, userId: string) => {
+    const setSessionCookie = async (reply: FastifyReply, userId: string) => {
       const { token, expiresAt } = await createSession(app, userId);
       reply.setCookie(SESSION_COOKIE, token, {
         path: '/',

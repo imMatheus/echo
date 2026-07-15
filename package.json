@@ -11,10 +11,10 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "bun run --filter './packages/*' --filter './apps/*' build",
-    "dev": "bun run --filter @echo/server --filter @echo/web dev",
+    "build": "bun run --filter @echo/shared build && bun run --filter echo-context-mcp --filter @echo/server --filter @echo/web build",
+    "dev": "bun run --filter @echo/shared build && bun run --filter @echo/server --filter @echo/web dev",
     "start": "bun apps/server/src/index.ts",
-    "test": "bun run --filter './packages/*' --filter './apps/*' test",
-    "typecheck": "bun run --filter './packages/*' --filter './apps/*' typecheck"
+    "test": "bun run --filter @echo/shared build && bun run --filter './packages/*' --filter './apps/*' test",
+    "typecheck": "bun run --filter @echo/shared build && bun run --filter './packages/*' --filter './apps/*' typecheck"
   }
 }

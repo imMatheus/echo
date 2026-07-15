@@ -17,6 +17,10 @@ function jsonRpcError(reply: FastifyReply, status: number, code: number, message
 export function mcpRoutes(app: AppContext) {
   return async function routes(f: FastifyInstance) {
     f.post('/mcp', async (req, reply) => {
+      // This route writes directly to the raw response after hijacking Fastify,
+      // so the normal onSend hardening hook does not get a chance to run.
+      reply.raw.setHeader('cache-control', 'no-store');
+      reply.raw.setHeader('x-content-type-options', 'nosniff');
       const ctx = await requireApiKeyAuth(app, req);
       if (!ctx) {
         reply.header('www-authenticate', 'Bearer realm="echo", error="invalid_token"');

@@ -8,10 +8,14 @@ export const SESSION_COOKIE = 'echo_session';
 
 const AUTH_CACHE = Symbol('echo.auth');
 
+function bearerSecret(header: string | undefined): string | null {
+  const match = /^Bearer\s+(.+)$/i.exec(header ?? '');
+  return match?.[1]?.trim() || null;
+}
+
 async function resolveAuth(app: AppContext, req: FastifyRequest): Promise<AuthContext | null> {
-  const header = req.headers.authorization;
-  if (header?.startsWith('Bearer ')) {
-    const secret = header.slice('Bearer '.length).trim();
+  const secret = bearerSecret(req.headers.authorization);
+  if (secret) {
     const key = await resolveApiKey(app, secret);
     if (!key) return null;
     return {
@@ -50,10 +54,18 @@ export async function requireAuth(app: AppContext, req: FastifyRequest): Promise
   return auth;
 }
 
+/** Credential management is deliberately dashboard-session-only. */
+export async function requireSessionAuth(app: AppContext, req: FastifyRequest): Promise<AuthContext> {
+  const auth = await requireAuth(app, req);
+  if (auth.via !== 'session') {
+    throw unauthorized('A dashboard session is required to manage API keys');
+  }
+  return auth;
+}
+
 /** API-key-only variant used by the MCP endpoint. Returns null instead of throwing. */
 export async function requireApiKeyAuth(app: AppContext, req: FastifyRequest): Promise<AuthContext | null> {
-  const header = req.headers.authorization;
-  if (!header?.startsWith('Bearer ')) return null;
+  if (!bearerSecret(req.headers.authorization)) return null;
   const auth = await resolveAuth(app, req);
   return auth?.via === 'api_key' ? auth : null;
 }

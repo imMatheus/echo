@@ -6,11 +6,11 @@
  * plain `api.*` functions and then revalidate the relevant keys with `mutate`
  * (see the `useRevalidate*` helpers and each page's handlers).
  */
-import { useCallback } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import type { SWRConfiguration } from 'swr';
 import { toast } from 'sonner';
-import type { ListMemoriesQuery, ListMemoriesResponse, StatsRange } from '@echo/shared';
+import type { ListMemoriesQuery, ListMemoriesResponse, ScopeWithAccess, StatsRange } from '@echo/shared';
 import type { AuditQuery } from '@/api';
 import * as api from '@/api';
 import { ApiRequestError, errorMessage } from '@/api';
@@ -42,8 +42,44 @@ export const keys = {
   stats: (range: string) => ['stats', range] as const,
 };
 
-/** Matches every browse-list memories key, regardless of scope/kind/filters. */
+const AUTHORIZATION_SNAPSHOT_PREFIXES = new Set([
+  'org',
+  'org:members',
+  'scope:members',
+  'memory',
+  'memories',
+  'audit',
+  'stats',
+]);
+
+/** Semantic-search snapshots must be evicted without replaying their audited POST. */
+export const isMemorySearchKey = (key: unknown): boolean =>
+  Array.isArray(key) && key[0] === 'memories:search';
+
+/** Safe-to-refetch GET snapshots whose visibility depends on scope access. */
+export const isAuthorizationSnapshotKey = (key: unknown): boolean =>
+  key === keys.orgs ||
+  (Array.isArray(key) && AUTHORIZATION_SNAPSHOT_PREFIXES.has(String(key[0])));
+
+/** Data whose visibility can change when organization membership or role changes. */
+export const isAuthorizationDependentKey = (key: unknown): boolean =>
+  key === keys.scopes || isMemorySearchKey(key) || isAuthorizationSnapshotKey(key);
+
+/** Stable fingerprint of the access-relevant fields returned by GET /scopes. */
+export function scopeAccessSignature(
+  scopes: ReadonlyArray<Pick<ScopeWithAccess, 'id' | 'canWrite' | 'canManage'>>,
+): string {
+  return scopes
+    .map((scope) => `${scope.id}:${Number(scope.canWrite)}:${Number(scope.canManage)}`)
+    .sort()
+    .join('|');
+}
+
 const isMemoriesKey = (key: unknown): boolean => Array.isArray(key) && key[0] === 'memories';
+
+/** Cached snapshots that should refetch on their next mount after a memory write. */
+const isMemorySnapshotKey = (key: unknown): boolean =>
+  Array.isArray(key) && (key[0] === 'memories:search' || key[0] === 'stats' || key[0] === 'audit');
 
 // ---------------------------------------------------------------------------
 // Reads
@@ -55,7 +91,35 @@ export function useMeta() {
 }
 
 export function useScopes() {
-  return useSWR(keys.scopes, () => api.listScopes().then((r) => r.scopes), toastOnError);
+  return useSWR(keys.scopes, () => api.listScopes().then((r) => r.scopes), {
+    ...toastOnError,
+    // Authorization can change in another browser/session while this tab stays
+    // open. Keep the privacy snapshot reasonably fresh even without refocus.
+    refreshInterval: 60_000,
+    refreshWhenHidden: false,
+  });
+}
+
+/** Mount once inside the authenticated layout to purge data after access changes. */
+export function useScopeAuthorizationGuard(): void {
+  const { mutate } = useSWRConfig();
+  const { data } = useScopes();
+  const signature = data ? scopeAccessSignature(data) : null;
+  const previousSignature = useRef(signature);
+
+  useEffect(() => {
+    if (signature === null) return;
+    const previous = previousSignature.current;
+    previousSignature.current = signature;
+    if (previous === null || previous === signature) return;
+
+    // Scope membership and canManage are the dashboard's authorization
+    // snapshot. If either changes, remove every result derived from the old
+    // access before refetching mounted GETs. Searches are audited POSTs, so
+    // evict them without passive replay.
+    void mutate(isMemorySearchKey, undefined, { revalidate: false });
+    void mutate(isAuthorizationSnapshotKey, undefined, { revalidate: true });
+  }, [mutate, signature]);
 }
 
 export function useOrgs() {
@@ -119,7 +183,13 @@ export function useMemorySearch(query: string | null, scope: string) {
           limit: 50,
         })
         .then((res) => ({ query: q, results: res.results, mode: res.mode })),
-    toastOnError,
+    {
+      ...toastOnError,
+      // Search is a POST that records a recall. Passive refocus/reconnect
+      // revalidation would create audit events the user never initiated.
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+    },
   );
 }
 
@@ -140,13 +210,17 @@ export function useStats(range: StatsRange) {
 // ---------------------------------------------------------------------------
 
 /**
- * Revalidate every memories list plus the scope list — call after creating,
- * editing, or deleting a memory (list previews and per-scope counts change).
+ * Revalidate memory lists/searches plus scopes, stats, and audit — call after
+ * creating, editing, or deleting a memory so every derived view catches up.
  */
 export function useRevalidateMemories() {
   const { mutate } = useSWRConfig();
   return useCallback(() => {
     void mutate(isMemoriesKey);
     void mutate(keys.scopes);
+    // Do not eagerly replay every cached semantic query or stats range. Those
+    // can be expensive and would create misleading audit activity; evict them
+    // so the next mounted view fetches a fresh snapshot instead.
+    void mutate(isMemorySnapshotKey, undefined, { revalidate: false });
   }, [mutate]);
 }

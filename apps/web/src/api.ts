@@ -21,7 +21,6 @@ import type {
   OrgRole,
   Organization,
   OrganizationWithRole,
-  Scope,
   ScopeMember,
   ScopeWithAccess,
   SearchMemoriesRequest,
@@ -35,6 +34,10 @@ import type {
 } from '@echo/shared';
 
 const BASE = '/api/v1';
+const REQUEST_TIMEOUT_MS = 30_000;
+
+/** Emitted when an authenticated API call discovers that the session expired. */
+export const AUTH_EXPIRED_EVENT = 'echo:auth-expired';
 
 export type ApiErrorCode = ApiError['error']['code'];
 
@@ -76,31 +79,56 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     if (qs) url += `?${qs}`;
   }
 
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
   let res: Response;
   try {
     res = await fetch(url, {
       method: options.method ?? 'GET',
       headers: options.body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
       body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+      signal: controller.signal,
     });
   } catch {
+    window.clearTimeout(timeoutId);
+    if (controller.signal.aborted) {
+      throw new ApiRequestError(0, 'internal_error', 'Request timed out after 30 seconds');
+    }
     throw new ApiRequestError(0, 'internal_error', 'Could not reach the server');
   }
 
-  if (!res.ok) {
-    let code: ApiErrorCode = 'internal_error';
-    let message = `Request failed (${res.status})`;
-    try {
-      const data = (await res.json()) as Partial<ApiError>;
-      if (data?.error?.code) code = data.error.code;
-      if (data?.error?.message) message = data.error.message;
-    } catch {
-      // non-JSON error body; keep defaults
+  try {
+    if (!res.ok) {
+      let code: ApiErrorCode = 'internal_error';
+      let message = `Request failed (${res.status})`;
+      try {
+        const data = (await res.json()) as Partial<ApiError>;
+        if (data?.error?.code) code = data.error.code;
+        if (data?.error?.message) message = data.error.message;
+      } catch {
+        if (controller.signal.aborted) {
+          throw new ApiRequestError(0, 'internal_error', 'Request timed out after 30 seconds');
+        }
+        // non-JSON error body; keep defaults
+      }
+      if (res.status === 401 && !path.startsWith('/auth/')) {
+        window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
+      }
+      throw new ApiRequestError(res.status, code, message);
     }
-    throw new ApiRequestError(res.status, code, message);
-  }
 
-  return (await res.json()) as T;
+    try {
+      return (await res.json()) as T;
+    } catch {
+      if (controller.signal.aborted) {
+        throw new ApiRequestError(0, 'internal_error', 'Request timed out after 30 seconds');
+      }
+      throw new ApiRequestError(0, 'internal_error', 'The server returned an invalid response');
+    }
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -185,8 +213,8 @@ export function listScopes(): Promise<{ scopes: ScopeWithAccess[] }> {
   return request<{ scopes: ScopeWithAccess[] }>('/scopes');
 }
 
-export function createScope(body: CreateScopeRequest): Promise<{ scope: Scope }> {
-  return request<{ scope: Scope }>('/scopes', { method: 'POST', body });
+export function createScope(body: CreateScopeRequest): Promise<{ scope: ScopeWithAccess }> {
+  return request<{ scope: ScopeWithAccess }>('/scopes', { method: 'POST', body });
 }
 
 export function deleteScope(id: string): Promise<{ ok: true }> {

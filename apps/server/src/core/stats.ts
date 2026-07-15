@@ -1,7 +1,8 @@
 import type { StatsRange, UsageStats } from '@echo/shared';
-import { and, count, desc, eq, gte, inArray, isNull, sql } from 'drizzle-orm';
+import { and, count, desc, eq, gt, gte, inArray, isNull, or, sql } from 'drizzle-orm';
 import type { PgColumn } from 'drizzle-orm/pg-core';
 import { getAccessibleScopes } from '@/core/access';
+import { notOrgReadFanout } from '@/core/audit';
 import { auditLogs, memories } from '@/db/schema';
 import type { AppContext } from '@/types';
 
@@ -58,7 +59,11 @@ export async function getUsageStats(app: AppContext, userId: string, range: Stat
 
   const memoryBucket = bucketExpr(memories.createdAt, granularity);
   const auditBucket = bucketExpr(auditLogs.occurredAt, granularity);
-  const inRange = and(eq(auditLogs.actorUserId, userId), gte(auditLogs.occurredAt, since));
+  const inRange = and(
+    eq(auditLogs.actorUserId, userId),
+    gte(auditLogs.occurredAt, since),
+    notOrgReadFanout,
+  );
 
   const [memoriesOverTime, actionsOverTime, sourceApps] = await Promise.all([
     scopeIds.length === 0
@@ -70,6 +75,7 @@ export async function getUsageStats(app: AppContext, userId: string, range: Stat
             and(
               inArray(memories.scopeId, scopeIds),
               isNull(memories.deletedAt),
+              or(isNull(memories.expiresAt), gt(memories.expiresAt, sql`now()`)),
               gte(memories.createdAt, since),
             ),
           )

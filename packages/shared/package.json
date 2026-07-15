@@ -2,6 +2,7 @@
   "name": "@echo/shared",
   "version": "0.1.0",
   "description": "Shared types for Echo, the open context layer for AI apps",
+  "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

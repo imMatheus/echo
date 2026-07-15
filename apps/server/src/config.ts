@@ -7,24 +7,24 @@ const boolString = z
   .transform((v) => v === 'true' || v === '1');
 
 const EnvSchema = z.object({
-  DATABASE_URL: z.string().default('postgres://echo:echo@localhost:5433/echo'),
+  DATABASE_URL: z.string().trim().min(1).default('postgres://echo:echo@localhost:5433/echo'),
   // 3246 spells ECHO on a phone keypad — and stays clear of crowded dev ports
   // like 8787 (wrangler and friends).
-  PORT: z.coerce.number().int().positive().default(3246),
-  HOST: z.string().default('0.0.0.0'),
+  PORT: z.coerce.number().int().min(1).max(65_535).default(3246),
+  HOST: z.string().trim().min(1).default('0.0.0.0'),
   /** Public URL of this deployment; used to mark session cookies Secure when https. */
-  APP_URL: z.string().optional(),
+  APP_URL: z.string().trim().url().optional(),
   DISABLE_SIGNUP: boolString.default('false'),
-  SESSION_TTL_DAYS: z.coerce.number().positive().default(30),
+  SESSION_TTL_DAYS: z.coerce.number().int().min(1).max(3650).default(30),
   EMBEDDINGS_PROVIDER: z.enum(['none', 'openai', 'voyage', 'ollama']).default('none'),
-  EMBEDDINGS_MODEL: z.string().optional(),
-  OPENAI_API_KEY: z.string().optional(),
-  OPENAI_BASE_URL: z.string().default('https://api.openai.com/v1'),
-  VOYAGE_API_KEY: z.string().optional(),
-  OLLAMA_URL: z.string().default('http://localhost:11434'),
-  LOG_LEVEL: z.string().default('info'),
+  EMBEDDINGS_MODEL: z.string().trim().min(1).optional(),
+  OPENAI_API_KEY: z.string().trim().min(1).optional(),
+  OPENAI_BASE_URL: z.string().trim().url().default('https://api.openai.com/v1'),
+  VOYAGE_API_KEY: z.string().trim().min(1).optional(),
+  OLLAMA_URL: z.string().trim().url().default('http://localhost:11434'),
+  LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   /** Override where the built dashboard is served from. */
-  STATIC_DIR: z.string().optional(),
+  STATIC_DIR: z.string().trim().min(1).optional(),
   TRUST_PROXY: boolString.default('false'),
 });
 
@@ -45,5 +45,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   if (cfg.EMBEDDINGS_PROVIDER === 'voyage' && !cfg.VOYAGE_API_KEY) {
     throw new Error('EMBEDDINGS_PROVIDER=voyage requires VOYAGE_API_KEY');
   }
-  return { ...cfg, secureCookies: cfg.APP_URL?.startsWith('https://') ?? false };
+  return {
+    ...cfg,
+    secureCookies: cfg.APP_URL ? new URL(cfg.APP_URL).protocol.toLowerCase() === 'https:' : false,
+  };
 }

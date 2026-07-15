@@ -26,7 +26,11 @@ export async function createApiKey(
   input: { name: string; sourceApp?: string },
 ): Promise<CreateApiKeyResponse> {
   const { secret, prefix, hash } = generateApiKey();
-  const sourceApp = input.sourceApp?.trim() || input.name.trim().toLowerCase().replace(/\s+/g, '-');
+  // The explicit sourceApp is route-bounded to 64 characters. Keep the same
+  // invariant for the name-derived fallback used when callers omit it.
+  const sourceApp = (
+    input.sourceApp?.trim() || input.name.trim().toLowerCase().replace(/\s+/g, '-')
+  ).slice(0, 64);
   const [row] = await app.db
     .insert(apiKeys)
     .values({ userId: ctx.userId, name: input.name, sourceApp, keyPrefix: prefix, keyHash: hash })
@@ -34,6 +38,7 @@ export async function createApiKey(
   await logAudit(app, {
     action: 'apikey.create',
     actorUserId: ctx.userId,
+    apiKeyId: ctx.apiKeyId,
     sourceApp: ctx.sourceApp,
     details: { keyName: input.name, keyPrefix: prefix },
   });
@@ -59,6 +64,7 @@ export async function revokeApiKey(app: AppContext, ctx: AuthContext, keyId: str
   await logAudit(app, {
     action: 'apikey.revoke',
     actorUserId: ctx.userId,
+    apiKeyId: ctx.apiKeyId,
     sourceApp: ctx.sourceApp,
     details: { keyId },
   });
@@ -93,7 +99,14 @@ export async function resolveApiKey(app: AppContext, secret: string): Promise<Re
     app.db
       .update(apiKeys)
       .set({ lastUsedAt: sql`now()` })
-      .where(eq(apiKeys.id, row.keyId))
+      // Re-check staleness in the UPDATE so a burst of concurrent requests
+      // does not turn one per-minute heartbeat into one write per request.
+      .where(
+        and(
+          eq(apiKeys.id, row.keyId),
+          sql`(${apiKeys.lastUsedAt} IS NULL OR ${apiKeys.lastUsedAt} < now() - interval '1 minute')`,
+        ),
+      )
       .catch((err) => app.log.error({ err }, 'failed to update api key last_used_at'));
   }
   return {

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import type {
   CreateMemoryRequest,
@@ -62,6 +62,15 @@ export function MemoryFormModal({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (writable.some((scope) => scope.id === scopeId)) return;
+    const fallback =
+      defaultScopeId && writable.some((scope) => scope.id === defaultScopeId)
+        ? defaultScopeId
+        : (writable[0]?.id ?? '');
+    setScopeId(fallback);
+  }, [defaultScopeId, scopeId, writable]);
+
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -72,7 +81,7 @@ export function MemoryFormModal({
       return;
     }
     const conf = Number(confidence);
-    if (Number.isNaN(conf) || conf < 0 || conf > 1) {
+    if (!confidence.trim() || Number.isNaN(conf) || conf < 0 || conf > 1) {
       setError('Confidence must be a number between 0 and 1');
       return;
     }
@@ -92,11 +101,19 @@ export function MemoryFormModal({
       .split(',')
       .map((t) => t.trim())
       .filter(Boolean);
+    if (tagList.length > 20) {
+      setError('Use at most 20 tags');
+      return;
+    }
+    if (tagList.some((tag) => tag.length > 64)) {
+      setError('Each tag must be 64 characters or fewer');
+      return;
+    }
     if (tagList.length > 0) body.tags = tagList;
     if (expiresAt) {
       const date = new Date(expiresAt);
-      if (Number.isNaN(date.getTime())) {
-        setError('Invalid expiry date');
+      if (Number.isNaN(date.getTime()) || date.getTime() <= Date.now()) {
+        setError('Expiry must be a future date and time');
         return;
       }
       body.expiresAt = date.toISOString();
@@ -113,8 +130,12 @@ export function MemoryFormModal({
   };
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-[560px]">
+    <Dialog
+      open
+      disablePointerDismissal={pending}
+      onOpenChange={(open) => !open && !pending && onClose()}
+    >
+      <DialogContent className="sm:max-w-[560px]" showCloseButton={!pending}>
         <DialogHeader>
           <DialogTitle>New memory</DialogTitle>
         </DialogHeader>
@@ -136,6 +157,7 @@ export function MemoryFormModal({
                 placeholder="What should your AI tools remember?"
                 autoFocus
                 required
+                maxLength={10_000}
               />
             </Field>
 
@@ -203,6 +225,7 @@ export function MemoryFormModal({
                   step={0.05}
                   value={confidence}
                   onChange={(e) => setConfidence(e.target.value)}
+                  required
                 />
               </Field>
               <Field>
@@ -223,6 +246,7 @@ export function MemoryFormModal({
                 value={tags}
                 onChange={(e) => setTags(e.target.value)}
                 placeholder="comma, separated, tags"
+                maxLength={1_300}
               />
             </Field>
           </FieldGroup>

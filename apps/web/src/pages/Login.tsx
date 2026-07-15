@@ -19,14 +19,11 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
         </div>
       </div>
       <div className="relative hidden bg-muted lg:block">
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="flex flex-col items-center gap-6">
-            <LogoMark size={160} />
-            <p className="max-w-2xs text-center text-sm text-balance text-muted-foreground">
-              The open context layer for AI apps — one memory, every tool.
-            </p>
-          </div>
-        </div>
+        <img
+          src="https://cdn.midjourney.com/db4808c4-4514-4e8f-a807-ccdb36a9dfad/0_3.png"
+          alt=""
+          className="absolute inset-0 size-full object-cover"
+        />
       </div>
     </div>
   );

@@ -3,6 +3,9 @@
 import { createServer } from 'node:http';
 
 const DIM = 16;
+const SLOW_MARKER = '[slow-embedding]';
+let slowRequests = 0;
+const heldSlowResponses = [];
 
 function embed(text) {
   const v = new Array(DIM).fill(0);
@@ -16,12 +19,34 @@ function embed(text) {
 }
 
 createServer((req, res) => {
+  if (req.method === 'GET' && req.url === '/status') {
+    res.setHeader('content-type', 'application/json');
+    res.end(JSON.stringify({ slowRequests, heldRequests: heldSlowResponses.length }));
+    return;
+  }
+  if (req.method === 'POST' && req.url === '/release-slow') {
+    const pending = heldSlowResponses.splice(0);
+    for (const respond of pending) respond();
+    res.setHeader('content-type', 'application/json');
+    res.end(JSON.stringify({ released: pending.length }));
+    return;
+  }
   let body = '';
   req.on('data', (c) => (body += c));
   req.on('end', () => {
     const { input } = JSON.parse(body);
     const texts = Array.isArray(input) ? input : [input];
-    res.setHeader('content-type', 'application/json');
-    res.end(JSON.stringify({ data: texts.map((t, i) => ({ index: i, embedding: embed(t) })) }));
+    const respond = () => {
+      res.setHeader('content-type', 'application/json');
+      res.end(JSON.stringify({ data: texts.map((t, i) => ({ index: i, embedding: embed(t) })) }));
+    };
+    if (texts.some((text) => String(text).includes(SLOW_MARKER))) {
+      slowRequests += 1;
+      // The race smoke explicitly releases this response after the membership
+      // revocation commits. A barrier is deterministic even on a loaded runner.
+      heldSlowResponses.push(respond);
+    } else {
+      respond();
+    }
   });
-}).listen(9999, () => console.log('mock embeddings on :9999'));
+}).listen(9999, '127.0.0.1', () => console.log('mock embeddings on 127.0.0.1:9999'));

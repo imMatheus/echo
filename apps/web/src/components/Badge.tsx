@@ -3,7 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
 const SCOPE_CLASSES: Record<ScopeType, string> = {
-  personal: 'border-scope-personal/30 bg-scope-personal/10 text-scope-personal',
+  personal: 'border-chart-1 bg-chart-1 text-chart-1-foreground',
   organization: 'border-scope-organization/30 bg-scope-organization/10 text-scope-organization',
   team: 'border-scope-team/30 bg-scope-team/10 text-scope-team',
   project: 'border-scope-project/30 bg-scope-project/10 text-scope-project',
@@ -13,7 +13,7 @@ const SCOPE_CLASSES: Record<ScopeType, string> = {
 /** Scope badge — colored by scope type, shows the scope name (or the type). */
 export function ScopeBadge({ type, name }: { type: ScopeType; name?: string }) {
   return (
-    <Badge className={SCOPE_CLASSES[type]} title={`${type} scope`}>
+    <Badge className={cn('max-w-full', SCOPE_CLASSES[type])} title={name ? `${name} (${type} scope)` : `${type} scope`}>
       {name ?? type}
     </Badge>
   );
@@ -51,7 +51,11 @@ export function SensitivityBadge({ sensitivity }: { sensitivity: Sensitivity }) 
 /** Small monospace chip for source apps and similar identifiers. */
 export function SourceChip({ app, className }: { app: string; className?: string }) {
   return (
-    <Badge variant="outline" className={cn('rounded-md font-mono text-muted-foreground', className)} title="Source app">
+    <Badge
+      variant="outline"
+      className={cn('max-w-full rounded-md font-mono text-muted-foreground', className)}
+      title={`Source app: ${app}`}
+    >
       {app}
     </Badge>
   );
@@ -73,7 +77,7 @@ export function RoleBadge({ role }: { role: OrgRole }) {
 
 export function Tag({ tag }: { tag: string }) {
   return (
-    <Badge variant="secondary" className="rounded-md text-muted-foreground">
+    <Badge variant="secondary" className="max-w-full rounded-md text-muted-foreground" title={`Tag: ${tag}`}>
       #{tag}
     </Badge>
   );

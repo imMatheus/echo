@@ -14,11 +14,14 @@ const DEFAULT_MODELS: Record<string, string> = {
   ollama: 'nomic-embed-text',
 };
 
+export const EMBEDDING_TIMEOUT_MS = 15_000;
+
 async function postJson(url: string, body: unknown, headers: Record<string, string>): Promise<any> {
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'content-type': 'application/json', ...headers },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(EMBEDDING_TIMEOUT_MS),
   });
   if (!res.ok) {
     const text = await res.text().catch(() => '');
@@ -79,5 +82,8 @@ export function createEmbeddingProvider(cfg: Config): EmbeddingProvider | null {
 
 /** pgvector accepts the '[1,2,3]' text form with a ::vector cast. */
 export function toVectorLiteral(embedding: number[]): string {
+  if (embedding.length === 0 || embedding.length > 16_000 || embedding.some((value) => !Number.isFinite(value))) {
+    throw new Error('embedding provider returned an invalid vector');
+  }
   return `[${embedding.join(',')}]`;
 }

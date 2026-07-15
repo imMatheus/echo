@@ -12,8 +12,8 @@ import { requireAuth } from '@/http/authn';
 
 const auditQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50),
-  offset: z.coerce.number().int().min(0).default(0),
-  action: z.string().max(64).optional(),
+  offset: z.coerce.number().int().min(0).max(100_000).default(0),
+  action: z.string().trim().min(1).max(64).optional(),
 });
 
 const statsQuerySchema = z.object({

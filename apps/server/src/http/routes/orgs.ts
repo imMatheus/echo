@@ -18,9 +18,10 @@ import type { AppContext } from '@/types';
 import { requireAuth } from '@/http/authn';
 
 const createSchema = z.object({
-  name: z.string().min(1).max(100),
+  name: z.string().trim().min(1).max(100),
   slug: z
     .string()
+    .trim()
     .min(2)
     .max(48)
     .regex(/^[a-z0-9][a-z0-9-]*$/, 'lowercase letters, digits and dashes only')
@@ -32,8 +33,8 @@ const memberParam = z.object({ id: z.string().uuid(), userId: z.string().uuid() 
 
 const auditQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50),
-  offset: z.coerce.number().int().min(0).default(0),
-  action: z.string().max(64).optional(),
+  offset: z.coerce.number().int().min(0).max(100_000).default(0),
+  action: z.string().trim().min(1).max(64).optional(),
 });
 
 export function orgRoutes(app: AppContext) {
@@ -60,7 +61,7 @@ export function orgRoutes(app: AppContext) {
     f.patch('/orgs/:id', async (req) => {
       const ctx = await requireAuth(app, req);
       const { id } = parse(idParam, req.params);
-      const { name } = parse(z.object({ name: z.string().min(1).max(100) }), req.body);
+      const { name } = parse(z.object({ name: z.string().trim().min(1).max(100) }), req.body);
       return { org: await renameOrg(app, ctx, id, name) };
     });
 
@@ -74,7 +75,7 @@ export function orgRoutes(app: AppContext) {
       const ctx = await requireAuth(app, req);
       const { id } = parse(idParam, req.params);
       const body = parse(
-        z.object({ email: z.string().email(), role: z.enum(ORG_ROLES).default('member') }),
+        z.object({ email: z.string().trim().email().max(254), role: z.enum(ORG_ROLES).default('member') }),
         req.body,
       );
       const member = await addOrgMember(app, ctx, id, body.email, body.role);

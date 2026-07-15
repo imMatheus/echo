@@ -1,5 +1,6 @@
-// Verifies the pgvector hybrid-search path against a mock embedding provider.
-const BASE = 'http://127.0.0.1:3247';
+// Verifies hybrid search (ECHO_BASE_URL defaults to 127.0.0.1:3247).
+const BASE = (process.env.ECHO_BASE_URL ?? 'http://127.0.0.1:3247').replace(/\/+$/, '');
+const MOCK_BASE = (process.env.MOCK_EMBEDDINGS_URL ?? 'http://127.0.0.1:9999').replace(/\/+$/, '');
 const RUN = `vec-${Date.now().toString(36)}`;
 let passed = 0, failed = 0;
 const check = (name, cond, extra = '') => {
@@ -13,6 +14,27 @@ async function api(method, path, { body, cookie } = {}) {
   if (cookie) headers.cookie = cookie;
   const res = await fetch(`${BASE}/api/v1${path}`, { method, headers, body: body && JSON.stringify(body) });
   return { status: res.status, json: await res.json().catch(() => null), res };
+}
+
+async function slowRequestCount() {
+  const res = await fetch(`${MOCK_BASE}/status`);
+  return (await res.json()).slowRequests;
+}
+
+async function waitForSlowRequest(previous) {
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline) {
+    if ((await slowRequestCount()) > previous) return;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  throw new Error('mock embedding request did not start');
+}
+
+async function releaseSlowRequests() {
+  const res = await fetch(`${MOCK_BASE}/release-slow`, { method: 'POST' });
+  if (!res.ok) throw new Error(`could not release mock embedding request: ${res.status}`);
+  const payload = await res.json();
+  if (payload.released < 1) throw new Error('mock embedding barrier had no request to release');
 }
 
 const meta = await api('GET', '/meta');
@@ -38,6 +60,55 @@ check('similarity populated', typeof s1.json?.results?.[0]?.similarity === 'numb
 
 const s2 = await api('POST', '/memories/search', { cookie, body: { query: 'terraform deployment approval' } });
 check('finds pipeline memory', s2.json?.results?.[0]?.content?.includes('terraform'));
+
+// Mutation-time authorization regression: access can be revoked while a slow
+// embedding call is in flight. The eventual write must re-check membership.
+const bobSignup = await api('POST', '/auth/signup', {
+  body: { email: `${RUN}-bob@example.com`, password: 'password-123', name: 'Vector Bob' },
+});
+const bobCookie = `echo_session=${bobSignup.res.headers.get('set-cookie').match(/echo_session=([^;]+)/)[1]}`;
+const org = await api('POST', '/orgs', { cookie, body: { name: `Vector Race ${RUN}` } });
+const orgId = org.json.org.id;
+const scopeList = await api('GET', '/scopes', { cookie });
+const orgScope = scopeList.json.scopes.find((scope) => scope.orgId === orgId && scope.type === 'organization');
+await api('POST', `/orgs/${orgId}/members`, {
+  cookie,
+  body: { email: `${RUN}-bob@example.com`, role: 'member' },
+});
+
+let slowBefore = await slowRequestCount();
+const pendingCreate = api('POST', '/memories', {
+  cookie: bobCookie,
+  body: { content: '[slow-embedding] revoked create must not persist', scopeId: orgScope.id },
+});
+await waitForSlowRequest(slowBefore);
+await api('DELETE', `/orgs/${orgId}/members/${bobSignup.json.user.id}`, { cookie });
+await releaseSlowRequests();
+const revokedCreate = await pendingCreate;
+check('revoked in-flight create is rejected', revokedCreate.status === 404, `status=${revokedCreate.status}`);
+const afterCreateRace = await api('GET', `/memories?scopeId=${orgScope.id}`, { cookie });
+check('revoked in-flight create stores no row', !afterCreateRace.json.memories.some((m) => m.content.includes('revoked create')));
+
+await api('POST', `/orgs/${orgId}/members`, {
+  cookie,
+  body: { email: `${RUN}-bob@example.com`, role: 'member' },
+});
+const editable = await api('POST', '/memories', {
+  cookie: bobCookie,
+  body: { content: 'original content survives revoked update', scopeId: orgScope.id },
+});
+slowBefore = await slowRequestCount();
+const pendingUpdate = api('PATCH', `/memories/${editable.json.memory.id}`, {
+  cookie: bobCookie,
+  body: { content: '[slow-embedding] unauthorized replacement' },
+});
+await waitForSlowRequest(slowBefore);
+await api('DELETE', `/orgs/${orgId}/members/${bobSignup.json.user.id}`, { cookie });
+await releaseSlowRequests();
+const revokedUpdate = await pendingUpdate;
+check('revoked in-flight update is rejected', revokedUpdate.status === 404, `status=${revokedUpdate.status}`);
+const unchanged = await api('GET', `/memories/${editable.json.memory.id}`, { cookie });
+check('revoked in-flight update leaves content unchanged', unchanged.json.memory.content === 'original content survives revoked update');
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

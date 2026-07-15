@@ -17,7 +17,7 @@ import { requireAuth } from '@/http/authn';
 const createSchema = z.object({
   orgId: z.string().uuid(),
   type: z.enum(ORG_SCOPE_TYPES),
-  name: z.string().min(1).max(100),
+  name: z.string().trim().min(1).max(100),
 });
 
 const idParam = z.object({ id: z.string().uuid() });
@@ -35,7 +35,8 @@ export function scopeRoutes(app: AppContext) {
       const ctx = await requireAuth(app, req);
       const body = parse(createSchema, req.body);
       const { id } = await createOrgScope(app, ctx, body);
-      const scope = await getScopeAccess(app, ctx.userId, id);
+      // A newly created scope is empty, so avoid a redundant memory count.
+      const scope = await getScopeAccess(app, ctx.userId, id, false);
       if (!scope) throw notFound('Scope not found');
       reply.code(201);
       return { scope: toScopeWithAccess(scope) };
@@ -57,7 +58,7 @@ export function scopeRoutes(app: AppContext) {
     f.post('/scopes/:id/members', async (req, reply) => {
       const ctx = await requireAuth(app, req);
       const { id } = parse(idParam, req.params);
-      const { email } = parse(z.object({ email: z.string().email() }), req.body);
+      const { email } = parse(z.object({ email: z.string().trim().email().max(254) }), req.body);
       const member = await addScopeMember(app, ctx, id, email);
       reply.code(201);
       return { member };

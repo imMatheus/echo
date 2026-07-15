@@ -1,17 +1,20 @@
-import { useState } from 'react';
-import type { FormEvent, ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { LayersIcon, PlusIcon, SearchIcon } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
 import type { Memory, MemoryKind, ScopeWithAccess } from '@echo/shared';
 import { MEMORY_KINDS } from '@echo/shared';
+import { ApiRequestError } from '@/api';
 import { useMemories, useMemorySearch, useRevalidateMemories } from '@/hooks';
 import { KindBadge, ScopeBadge, SensitivityBadge, SourceChip, Tag } from './Badge';
 import { EmptyState } from './EmptyState';
 import { MemoryFormModal } from './MemoryFormModal';
+import { PageHeader } from './PageHeader';
 import { PageLoading } from './PageLoading';
 import { Pagination } from './Pagination';
 import { RelativeTime } from './RelativeTime';
+import { RequestErrorState } from './RequestErrorState';
 import { ScopeSelectItems, scopeSelectItems } from './ScopeOptions';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -23,11 +26,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Spinner } from '@/components/ui/spinner';
 import { useDebouncedValue } from '@/lib/use-debounced';
 import { cn } from '@/lib/utils';
 
-const PAGE_SIZE = 50;
+// Divisible by both 2 and 3 so full pages always fill complete grid rows.
+const PAGE_SIZE = 24;
+
+/** Responsive card grid: 1 column on phones, 2 on tablets, 3 on large screens. */
+const CARD_GRID = 'grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3';
 
 const KIND_ITEMS = [
   { value: 'all', label: 'All kinds' },
@@ -35,25 +41,32 @@ const KIND_ITEMS = [
 ];
 
 export function MemoryCard({ memory, scorePill }: { memory: Memory; scorePill?: ReactNode }) {
+  const location = useLocation();
   return (
     <Link
       to={`/memories/${memory.id}`}
-      className="block rounded-xl border bg-card px-4 py-3.5 transition-colors hover:border-ring/40 hover:bg-input/10"
+      // Carry the current page as `background` so the detail opens as a modal
+      // over this list; a direct visit to the URL renders the full page.
+      state={{ background: location }}
+      className="flex h-full min-w-0 flex-col gap-2.5 rounded-xl border bg-card p-4 transition-all hover:border-ring/40 hover:bg-input/10 hover:shadow-sm"
     >
-      <div className="mb-2.5 line-clamp-3 whitespace-pre-wrap text-sm leading-relaxed [overflow-wrap:anywhere]">
-        {memory.content}
-      </div>
-      <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+      <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
         {scorePill}
         <ScopeBadge type={memory.scopeType} name={memory.scopeName} />
         <KindBadge kind={memory.kind} />
         <SensitivityBadge sensitivity={memory.sensitivity} />
+        <span className="ms-auto whitespace-nowrap ps-1">
+          <RelativeTime date={memory.createdAt} />
+        </span>
+      </div>
+      <p className="line-clamp-4 whitespace-pre-wrap text-sm leading-relaxed [overflow-wrap:anywhere]">
+        {memory.content}
+      </p>
+      <div className="mt-auto flex min-w-0 flex-wrap items-center gap-1.5 pt-0.5">
         {memory.tags.map((t) => (
           <Tag key={t} tag={t} />
         ))}
         <SourceChip app={memory.sourceApp} />
-        <span className="flex-1" />
-        <RelativeTime date={memory.createdAt} />
       </div>
     </Link>
   );
@@ -66,6 +79,7 @@ export function MemoryCard({ memory, scorePill }: { memory: Memory; scorePill?: 
 export function MemoryBrowser({
   scopes,
   heading,
+  subheading,
   allowAllScopes = true,
   defaultScopeId,
 }: {
@@ -73,6 +87,8 @@ export function MemoryBrowser({
   scopes: ScopeWithAccess[];
   /** When set, renders an h1 header row with the memory count. */
   heading?: string;
+  /** Subtitle under the heading; only rendered when `heading` is set. */
+  subheading?: string;
   /** Include an "All scopes" option in the filter (personal view only). */
   allowAllScopes?: boolean;
   defaultScopeId?: string;
@@ -94,6 +110,10 @@ export function MemoryBrowser({
 
   const revalidateMemories = useRevalidateMemories();
 
+  const accessibleScopeIds = useMemo(() => new Set(scopes.map((scope) => scope.id)), [scopes]);
+  const scopeIdSignature = useMemo(() => [...accessibleScopeIds].sort().join('|'), [accessibleScopeIds]);
+  const previousScopeIdSignature = useRef(scopeIdSignature);
+
   const scopeItems = scopeSelectItems(
     scopes,
     allowAllScopes ? [{ value: 'all', label: 'All scopes' }] : undefined,
@@ -102,8 +122,15 @@ export function MemoryBrowser({
   // Only the free-text filters are debounced; scope/kind/pagination fetch immediately.
   const debouncedSourceApp = useDebouncedValue(sourceApp);
   const debouncedTag = useDebouncedValue(tag);
+  const debouncedSearchInput = useDebouncedValue(searchInput);
 
-  const { data: listData, isLoading, isValidating } = useMemories({
+  const {
+    data: listData,
+    error: listError,
+    isLoading,
+    isValidating,
+    mutate: mutateList,
+  } = useMemories({
     scopeId: scopeId === 'all' ? undefined : scopeId || undefined,
     kind: (kind === 'all' ? undefined : kind) as MemoryKind | undefined,
     sourceApp: debouncedSourceApp.trim() || undefined,
@@ -111,16 +138,52 @@ export function MemoryBrowser({
     limit: PAGE_SIZE,
     offset,
   });
-  const memories: Memory[] | null = listData?.memories ?? null;
-  const total = listData?.total ?? 0;
+  const memories: Memory[] | null = useMemo(
+    () => listData?.memories.filter((memory) => accessibleScopeIds.has(memory.scopeId)) ?? null,
+    [accessibleScopeIds, listData],
+  );
+  const discardedListResults = Boolean(listData && memories && memories.length !== listData.memories.length);
+  // Do not retain a total that can reveal how many now-inaccessible rows were
+  // present in the cached page while its fresh request is in flight.
+  const total = discardedListResults ? (memories?.length ?? 0) : (listData?.total ?? 0);
 
-  const { data: searchData, isValidating: searching } = useMemorySearch(
+  const {
+    data: searchData,
+    error: searchError,
+    isValidating: searching,
+    mutate: mutateSearch,
+  } = useMemorySearch(
     searchReq?.query ?? null,
     searchReq?.scope ?? scopeId,
   );
-  // Only treat search as active when the user has submitted one; keepPreviousData
-  // can otherwise leave stale results in the cache after clearing.
-  const search = searchReq ? (searchData ?? null) : null;
+  // Only treat search as active when the user has submitted one; clearing the
+  // request must also hide any cached result for an earlier identical query.
+  const search = useMemo(() => {
+    if (!searchReq || !searchData) return null;
+    const results = searchData.results.filter((memory) => accessibleScopeIds.has(memory.scopeId));
+    return results.length === searchData.results.length ? searchData : { ...searchData, results };
+  }, [accessibleScopeIds, searchData, searchReq]);
+
+  useEffect(() => {
+    const previous = previousScopeIdSignature.current;
+    previousScopeIdSignature.current = scopeIdSignature;
+    if (previous === scopeIdSignature) return;
+
+    // A membership change invalidates both the selected scope and the ranking
+    // of an all-scopes search. Clear the active request; useScopes also evicts
+    // every cached search key so resubmitting cannot flash old results.
+    setSearchReq(null);
+    setOffset(0);
+
+    if (scopeId !== 'all' && !accessibleScopeIds.has(scopeId)) {
+      const fallback = allowAllScopes
+        ? 'all'
+        : defaultScopeId && accessibleScopeIds.has(defaultScopeId)
+          ? defaultScopeId
+          : (scopes[0]?.id ?? '');
+      setScopeId(fallback);
+    }
+  }, [accessibleScopeIds, allowAllScopes, defaultScopeId, scopeId, scopeIdSignature, scopes]);
 
   const setFilter = (setter: (v: string) => void) => (value: string) => {
     setter(value);
@@ -137,15 +200,14 @@ export function MemoryBrowser({
     setSearchReq((prev) => (prev ? { ...prev, scope: value } : prev));
   };
 
-  const onSearchSubmit = (e: FormEvent) => {
-    e.preventDefault();
-    const query = searchInput.trim();
-    if (!query) {
-      setSearchReq(null);
-      return;
-    }
-    setSearchReq({ query, scope: scopeId });
-  };
+  useEffect(() => {
+    const query = debouncedSearchInput.trim();
+    setSearchReq((previous) => {
+      if (!query) return null;
+      if (previous?.query === query && previous.scope === scopeId) return previous;
+      return { query, scope: scopeId };
+    });
+  }, [debouncedSearchInput, scopeId]);
 
   const clearSearch = () => {
     setSearchReq(null);
@@ -178,36 +240,49 @@ export function MemoryBrowser({
     </Button>
   );
 
+  // SWR intentionally retains usable data across transient failures. A 403 or
+  // 404 is different: it can mean access was revoked, so cached rows must not
+  // remain visible while the scope refresh/reset completes.
+  const listAccessLost =
+    listError instanceof ApiRequestError && (listError.status === 403 || listError.status === 404);
+  const searchAccessLost =
+    searchError instanceof ApiRequestError && (searchError.status === 403 || searchError.status === 404);
+  const displayedListError = !searchReq && listError && (!listData || listAccessLost) ? listError : null;
+  const displayedSearchError =
+    searchReq && searchError && (!searchData || searchAccessLost) ? searchError : null;
+
   return (
     <div>
       {heading && (
-        <div className="mb-5 flex items-center gap-3">
-          <h1 className="font-heading text-xl font-semibold tracking-tight">{heading}</h1>
-          <Badge variant="secondary">{search ? search.results.length : total}</Badge>
-          <span className="flex-1" />
-          {newMemoryButton}
-        </div>
+        <PageHeader
+          title={heading}
+          titleExtra={<Badge variant="secondary">{search ? search.results.length : total}</Badge>}
+          subtitle={subheading}
+          actions={newMemoryButton}
+        />
       )}
 
-      <form className="mb-3 flex gap-2" onSubmit={onSearchSubmit}>
-        <div className="relative flex-1">
+      <div className="mb-3 flex flex-wrap gap-2">
+        <div className="relative min-w-40 flex-[1_1_16rem]">
           <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
             className="h-8 pl-8"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="Search memories semantically… (press Enter)"
+            placeholder="Search memories semantically…"
             aria-label="Search memories"
+            aria-busy={searching}
+            maxLength={1_000}
           />
         </div>
-        <Button type="submit" variant="outline" className="h-8" disabled={searching}>
-          {searching ? <Spinner /> : 'Search'}
-        </Button>
-        {!heading && <span className="flex-1" />}
         {!heading && newMemoryButton}
-      </form>
+      </div>
 
-      {search ? (
+      {displayedSearchError ? (
+        <RequestErrorState error={displayedSearchError} onRetry={() => mutateSearch()} title="Search failed" />
+      ) : displayedListError ? (
+        <RequestErrorState error={displayedListError} onRetry={() => mutateList()} />
+      ) : search ? (
         <div className="mb-4 flex flex-wrap items-center gap-2.5 text-xs text-muted-foreground">
           <span>
             {search.results.length} result{search.results.length === 1 ? '' : 's'} for “{search.query}”
@@ -226,7 +301,7 @@ export function MemoryBrowser({
       ) : (
         <div className="mb-4 flex flex-wrap gap-2">
           <Select items={scopeItems} value={scopeId} onValueChange={(v) => onScopeChange(v as string)}>
-            <SelectTrigger className="w-48" aria-label="Filter by scope">
+            <SelectTrigger className="w-48 max-w-full" aria-label="Filter by scope">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -235,7 +310,7 @@ export function MemoryBrowser({
             </SelectContent>
           </Select>
           <Select items={KIND_ITEMS} value={kind} onValueChange={(v) => setFilter(setKind)(v as string)}>
-            <SelectTrigger className="w-32" aria-label="Filter by kind">
+            <SelectTrigger className="w-32 max-w-full" aria-label="Filter by kind">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -247,23 +322,30 @@ export function MemoryBrowser({
             </SelectContent>
           </Select>
           <Input
-            className="w-32"
+            className="w-32 max-w-full"
             value={sourceApp}
             onChange={(e) => setFilter(setSourceApp)(e.target.value)}
             placeholder="Source app"
             aria-label="Filter by source app"
+            maxLength={64}
           />
           <Input
-            className="w-32"
+            className="w-32 max-w-full"
             value={tag}
             onChange={(e) => setFilter(setTag)(e.target.value)}
             placeholder="Tag"
             aria-label="Filter by tag"
+            maxLength={64}
           />
+          {hasFilters && (
+            <Button variant="ghost" size="sm" onClick={clearFilters}>
+              Reset filters
+            </Button>
+          )}
         </div>
       )}
 
-      {search ? (
+      {displayedSearchError || displayedListError ? null : search ? (
         search.results.length === 0 ? (
           <EmptyState
             icon={<LayersIcon />}
@@ -276,7 +358,7 @@ export function MemoryBrowser({
             }
           />
         ) : (
-          <div className="flex flex-col gap-2.5">
+          <div className={CARD_GRID}>
             {search.results.map((result, i) => (
               <MemoryCard
                 key={result.id}
@@ -324,7 +406,7 @@ export function MemoryBrowser({
         )
       ) : (
         <>
-          <div className={cn('flex flex-col gap-2.5', isValidating && 'opacity-55')}>
+          <div className={cn(CARD_GRID, isValidating && 'opacity-55')}>
             {(memories ?? []).map((m) => (
               <MemoryCard key={m.id} memory={m} />
             ))}

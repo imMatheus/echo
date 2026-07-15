@@ -147,7 +147,7 @@ export const apiKeys = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     revokedAt: timestamp('revoked_at', { withTimezone: true }),
   },
-  (t) => [index('api_keys_user_idx').on(t.userId)],
+  (t) => [index('api_keys_user_created_idx').on(t.userId, t.createdAt.desc())],
 );
 
 export const memories = pgTable(
@@ -175,10 +175,18 @@ export const memories = pgTable(
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
   },
   (t) => [
-    index('memories_scope_idx').on(t.scopeId).where(sql`deleted_at IS NULL`),
-    index('memories_tsv_idx').using('gin', t.tsv),
-    index('memories_tags_idx').using('gin', t.tags),
-    index('memories_created_idx').on(t.createdAt.desc()),
+    // Keep a full FK index for scope cascades, including already-soft-deleted rows.
+    index('memories_scope_all_idx').on(t.scopeId),
+    index('memories_scope_created_active_idx')
+      .on(t.scopeId, t.createdAt.desc())
+      .where(sql`deleted_at IS NULL`),
+    index('memories_tsv_active_idx').using('gin', t.tsv).where(sql`deleted_at IS NULL`),
+    index('memories_tags_active_idx').using('gin', t.tags).where(sql`deleted_at IS NULL`),
+    index('memories_created_active_idx').on(t.createdAt.desc()).where(sql`deleted_at IS NULL`),
+    index('memories_expires_idx')
+      .on(t.expiresAt)
+      .where(sql`expires_at IS NOT NULL AND deleted_at IS NULL`),
+    index('memories_deleted_idx').on(t.deletedAt).where(sql`deleted_at IS NOT NULL`),
     check('memories_kind_check', sql`${t.kind} IN ('explicit', 'inferred')`),
     check('memories_confidence_check', sql`${t.confidence} >= 0 AND ${t.confidence} <= 1`),
     check('memories_sensitivity_check', sql`${t.sensitivity} IN ('low', 'normal', 'high')`),

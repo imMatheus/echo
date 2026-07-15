@@ -9,8 +9,8 @@
     },
     {
       "name": "web",
-      "runtimeExecutable": "sh",
-      "runtimeArgs": ["-c", "cd /Users/matheus/Desktop/echo-claude/apps/web && ./node_modules/.bin/vite"],
+      "runtimeExecutable": "bun",
+      "runtimeArgs": ["--cwd", "apps/web", "run", "dev"],
       "port": 5173
     }
   ]

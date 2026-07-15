@@ -27,14 +27,16 @@ export interface ScopeAccess {
 // This query is the privacy boundary of the whole system, so it stays hand-written
 // SQL (executed through Drizzle's `sql` runner) rather than reshaped into the query
 // builder — the OR-logic and the correlated memory_count subquery must remain exact.
-const accessSelect = (userId: string): SQL => sql`
+const accessSelect = (userId: string, includeMemoryCount: boolean): SQL => sql`
   SELECT s.id, s.type, s.name, s.org_id, s.user_id, s.created_at,
          o.name AS org_name,
          om.role AS org_role,
          (sm.user_id IS NOT NULL) AS is_scope_member,
-         (SELECT count(*)::int FROM memories m
-            WHERE m.scope_id = s.id AND m.deleted_at IS NULL
-              AND (m.expires_at IS NULL OR m.expires_at > now())) AS memory_count
+         ${includeMemoryCount
+           ? sql`(SELECT count(*)::int FROM memories m
+                    WHERE m.scope_id = s.id AND m.deleted_at IS NULL
+                      AND (m.expires_at IS NULL OR m.expires_at > now()))`
+           : sql`0::int`} AS memory_count
   FROM scopes s
   LEFT JOIN organizations o ON o.id = s.org_id
   LEFT JOIN org_members om ON om.org_id = s.org_id AND om.user_id = ${userId}
@@ -63,18 +65,27 @@ function mapAccess(row: any): ScopeAccess {
   };
 }
 
-export async function getAccessibleScopes(app: AppContext, userId: string): Promise<ScopeAccess[]> {
+export async function getAccessibleScopes(
+  app: AppContext,
+  userId: string,
+  includeMemoryCount = true,
+): Promise<ScopeAccess[]> {
   const { rows } = await app.db.execute(
-    sql`${accessSelect(userId)} WHERE ${accessWhere(userId)}
+    sql`${accessSelect(userId, includeMemoryCount)} WHERE ${accessWhere(userId)}
      ORDER BY (s.type = 'personal') DESC, o.name NULLS FIRST, (s.type = 'organization') DESC, s.name`,
   );
   return rows.map(mapAccess);
 }
 
 /** null when the scope doesn't exist OR the user cannot see it (indistinguishable on purpose). */
-export async function getScopeAccess(app: AppContext, userId: string, scopeId: string): Promise<ScopeAccess | null> {
+export async function getScopeAccess(
+  app: AppContext,
+  userId: string,
+  scopeId: string,
+  includeMemoryCount = true,
+): Promise<ScopeAccess | null> {
   const { rows } = await app.db.execute(
-    sql`${accessSelect(userId)} WHERE s.id = ${scopeId} AND ${accessWhere(userId)}`,
+    sql`${accessSelect(userId, includeMemoryCount)} WHERE s.id = ${scopeId} AND ${accessWhere(userId)}`,
   );
   return rows[0] ? mapAccess(rows[0]) : null;
 }
@@ -107,12 +118,15 @@ export async function resolveScopeSelector(
   userId: string,
   selector: string | undefined,
 ): Promise<{ scope: ScopeAccess | null; error?: string }> {
-  const scopes = await getAccessibleScopes(app, userId);
+  // Scope resolution only needs authorization metadata; avoid counting every
+  // active memory on each MCP read/write just to select a destination.
+  const scopes = await getAccessibleScopes(app, userId, false);
   if (!selector || selector.toLowerCase() === 'personal') {
     return { scope: scopes.find((s) => s.type === 'personal') ?? null };
   }
   if (UUID_RE.test(selector)) {
-    return { scope: scopes.find((s) => s.id === selector) ?? null };
+    const normalizedId = selector.toLowerCase();
+    return { scope: scopes.find((s) => s.id === normalizedId) ?? null };
   }
   const needle = selector.toLowerCase();
   const matches = scopes.filter(

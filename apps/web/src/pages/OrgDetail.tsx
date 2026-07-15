@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Building2Icon, PlusIcon } from 'lucide-react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import type {
@@ -16,7 +16,15 @@ import { ORG_SCOPE_TYPES } from '@echo/shared';
 import type { AuditQuery } from '@/api';
 import * as api from '@/api';
 import { ApiRequestError, errorMessage } from '@/api';
-import { keys, useOrg, useOrgMembers, useScopeMembers, useScopes } from '@/hooks';
+import { useAuth } from '@/auth';
+import {
+  isAuthorizationDependentKey,
+  keys,
+  useOrg,
+  useOrgMembers,
+  useScopeMembers,
+  useScopes,
+} from '@/hooks';
 import { AuditTable } from '@/components/AuditTable';
 import { RoleBadge, ScopeBadge } from '@/components/Badge';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
@@ -25,6 +33,7 @@ import { MemoryBrowser } from '@/components/MemoryBrowser';
 import { PageHeader } from '@/components/PageHeader';
 import { PageLoading } from '@/components/PageLoading';
 import { RelativeTime } from '@/components/RelativeTime';
+import { RequestErrorState } from '@/components/RequestErrorState';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -59,6 +68,9 @@ import { cn } from '@/lib/utils';
 const TABS = ['memories', 'members', 'scopes', 'audit', 'settings'] as const;
 type Tab = (typeof TABS)[number];
 
+const isScopeMembersCacheKey = (key: unknown): boolean =>
+  Array.isArray(key) && key[0] === 'scope:members';
+
 const ROLE_ITEMS = [
   { value: 'member', label: 'member' },
   { value: 'admin', label: 'admin' },
@@ -73,8 +85,13 @@ export default function OrgDetailPage() {
   const rawTab = searchParams.get('tab');
   const tab: Tab = (TABS as readonly string[]).includes(rawTab ?? '') ? (rawTab as Tab) : 'memories';
 
-  const { data: orgData, error, isLoading: orgLoading } = useOrg(orgId);
-  const { data: allScopes, isLoading: scopesLoading, mutate: mutateScopes } = useScopes();
+  const { data: orgData, error, isLoading: orgLoading, mutate: mutateOrg } = useOrg(orgId);
+  const {
+    data: allScopes,
+    error: scopesError,
+    isLoading: scopesLoading,
+    mutate: mutateScopes,
+  } = useScopes();
 
   const org = orgData?.org ?? null;
   const role: OrgRole = orgData?.role ?? 'member';
@@ -82,9 +99,22 @@ export default function OrgDetailPage() {
     ? allScopes.filter((s) => s.orgId === orgId)
     : null;
   const notFound =
-    error instanceof ApiRequestError && (error.status === 404 || error.status === 403);
+    (error instanceof ApiRequestError && (error.status === 404 || error.status === 403)) ||
+    Boolean(org && allScopes && !allScopes.some((scope) => scope.orgId === orgId));
 
   if (orgLoading || scopesLoading) return <PageLoading />;
+
+  if (!notFound && ((!org && error) || (!allScopes && scopesError))) {
+    const loadError = !org && error && !notFound ? error : scopesError;
+    return (
+      <RequestErrorState
+        error={loadError}
+        onRetry={async () => {
+          await Promise.all([mutateOrg(), mutateScopes()]);
+        }}
+      />
+    );
+  }
 
   if (notFound || !org) {
     return (
@@ -101,7 +131,11 @@ export default function OrgDetailPage() {
     );
   }
 
-  const isAdmin = role === 'owner' || role === 'admin';
+  // Scope access refreshes are the privacy boundary and can arrive before the
+  // org-role request. Never keep rendering cached admin controls/audit data if
+  // the current scope snapshot already says management was revoked.
+  const isAdmin =
+    (role === 'owner' || role === 'admin') && (scopes?.some((scope) => scope.canManage) ?? true);
 
   return (
     <div>
@@ -120,7 +154,7 @@ export default function OrgDetailPage() {
         onValueChange={(value) => setSearchParams(value === 'memories' ? {} : { tab: value as string })}
         className="mb-5"
       >
-        <TabsList>
+        <TabsList className="max-w-full justify-start overflow-x-auto">
           {TABS.map((t) => (
             <TabsTrigger key={t} value={t}>
               {t.charAt(0).toUpperCase() + t.slice(1)}
@@ -145,7 +179,7 @@ export default function OrgDetailPage() {
           />
         ))}
 
-      {tab === 'members' && <MembersTab orgId={orgId} myRole={role} />}
+      {tab === 'members' && <MembersTab orgId={orgId} myRole={role} canManage={isAdmin} />}
 
       {tab === 'scopes' && (
         <ScopesTab
@@ -174,36 +208,76 @@ export default function OrgDetailPage() {
 // Members
 // ---------------------------------------------------------------------------
 
-function MembersTab({ orgId, myRole }: { orgId: string; myRole: OrgRole }) {
-  const { data: members, mutate } = useOrgMembers(orgId);
+function MembersTab({
+  orgId,
+  myRole,
+  canManage,
+}: {
+  orgId: string;
+  myRole: OrgRole;
+  canManage: boolean;
+}) {
+  const { data: members, error, mutate: mutateMembers } = useOrgMembers(orgId);
+  const { mutate } = useSWRConfig();
+  const { user } = useAuth();
+  const navigate = useNavigate();
   const [showAdd, setShowAdd] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<OrgMember | null>(null);
+  const [changingRoleId, setChangingRoleId] = useState<string | null>(null);
 
-  const isAdmin = myRole === 'owner' || myRole === 'admin';
+  const isAdmin = canManage;
 
   const changeRole = async (member: OrgMember, newRole: OrgRole) => {
+    if (newRole === member.role) return;
+    setChangingRoleId(member.userId);
     try {
       await api.updateOrgMember(orgId, member.userId, { role: newRole });
       toast.success(`${member.name} is now ${newRole}`);
-      await mutate();
+      const selfLostManagement = member.userId === user?.id && member.role !== 'member' && newRole === 'member';
+      if (selfLostManagement) {
+        // A demotion can revoke nested-scope and audit access. Never leave
+        // permission-derived snapshots from the old role in the cache.
+        await mutate(isAuthorizationDependentKey, undefined, { revalidate: false });
+      }
+      await Promise.allSettled([mutateMembers(), mutate(keys.org(orgId)), mutate(keys.orgs), mutate(keys.scopes)]);
     } catch (err) {
       toast.error(errorMessage(err));
-      await mutate(); // reset the select to the server state
+      await mutateMembers().catch(() => undefined); // reset the select to the server state
+    } finally {
+      setChangingRoleId(null);
     }
   };
 
   const removeMember = async () => {
     if (!removeTarget) return;
+    const target = removeTarget;
+    const leavingSelf = target.userId === user?.id;
     try {
-      await api.removeOrgMember(orgId, removeTarget.userId);
-      toast.success(`Removed ${removeTarget.name}`);
-      await mutate();
+      await api.removeOrgMember(orgId, target.userId);
+      toast.success(leavingSelf ? 'You left the organization' : `Removed ${target.name}`);
+      if (leavingSelf) {
+        await mutate(isAuthorizationDependentKey, undefined, { revalidate: false });
+        await Promise.allSettled([
+          mutate(keys.orgs),
+          mutate(keys.scopes),
+        ]);
+        navigate('/orgs', { replace: true });
+      } else {
+        await Promise.allSettled([
+          mutateMembers(),
+          mutate(keys.org(orgId)),
+          mutate(keys.orgs),
+          mutate(keys.scopes),
+          mutate(isScopeMembersCacheKey),
+        ]);
+      }
     } catch (err) {
       toast.error(errorMessage(err));
       throw err;
     }
   };
 
+  if (!members && error) return <RequestErrorState error={error} onRetry={() => mutateMembers()} />;
   if (!members) return <PageLoading />;
 
   return (
@@ -225,11 +299,13 @@ function MembersTab({ orgId, myRole }: { orgId: string; myRole: OrgRole }) {
               <TableHead>Email</TableHead>
               <TableHead>Role</TableHead>
               <TableHead>Joined</TableHead>
-              {isAdmin && <TableHead />}
+              <TableHead />
             </TableRow>
           </TableHeader>
           <TableBody>
             {members.map((member) => {
+              const isSelf = member.userId === user?.id;
+              const canAdminister = isAdmin && (myRole === 'owner' || member.role !== 'owner');
               // only owners can grant/revoke owner
               const roleItems = ROLE_ITEMS.filter(
                 (item) => item.value !== 'owner' || myRole === 'owner' || member.role === 'owner',
@@ -239,11 +315,12 @@ function MembersTab({ orgId, myRole }: { orgId: string; myRole: OrgRole }) {
                   <TableCell className="font-semibold">{member.name}</TableCell>
                   <TableCell className="text-muted-foreground">{member.email}</TableCell>
                   <TableCell>
-                    {isAdmin ? (
+                    {canAdminister ? (
                       <Select
                         items={roleItems}
                         value={member.role}
                         onValueChange={(v) => void changeRole(member, v as OrgRole)}
+                        disabled={changingRoleId !== null}
                       >
                         <SelectTrigger size="sm" aria-label={`Role for ${member.name}`}>
                           <SelectValue />
@@ -263,13 +340,18 @@ function MembersTab({ orgId, myRole }: { orgId: string; myRole: OrgRole }) {
                   <TableCell className="text-muted-foreground">
                     <RelativeTime date={member.joinedAt} />
                   </TableCell>
-                  {isAdmin && (
-                    <TableCell className="text-right">
-                      <Button variant="destructive" size="sm" onClick={() => setRemoveTarget(member)}>
-                        Remove
+                  <TableCell className="text-right">
+                    {(isSelf || canAdminister) && (
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => setRemoveTarget(member)}
+                        disabled={changingRoleId !== null}
+                      >
+                        {isSelf ? 'Leave' : 'Remove'}
                       </Button>
-                    </TableCell>
-                  )}
+                    )}
+                  </TableCell>
                 </TableRow>
               );
             })}
@@ -277,7 +359,7 @@ function MembersTab({ orgId, myRole }: { orgId: string; myRole: OrgRole }) {
         </Table>
       </div>
 
-      {showAdd && (
+      {isAdmin && showAdd && (
         <AddMemberModal
           myRole={myRole}
           onClose={() => setShowAdd(false)}
@@ -285,21 +367,32 @@ function MembersTab({ orgId, myRole }: { orgId: string; myRole: OrgRole }) {
             await api.addOrgMember(orgId, { email, role: memberRole });
             toast.success(`Added ${email}`);
             setShowAdd(false);
-            await mutate();
+            await Promise.allSettled([
+              mutateMembers(),
+              mutate(keys.org(orgId)),
+              mutate(keys.orgs),
+              mutate(keys.scopes),
+            ]);
           }}
         />
       )}
 
-      {removeTarget && (
+      {removeTarget && (removeTarget.userId === user?.id || isAdmin) && (
         <ConfirmDialog
-          title="Remove member?"
+          title={removeTarget.userId === user?.id ? 'Leave organization?' : 'Remove member?'}
           message={
             <>
-              <strong>{removeTarget.name}</strong> ({removeTarget.email}) will lose access to this
-              organization&rsquo;s memories and scopes.
+              {removeTarget.userId === user?.id ? (
+                <>You will lose access to this organization&rsquo;s memories and scopes.</>
+              ) : (
+                <>
+                  <strong>{removeTarget.name}</strong> ({removeTarget.email}) will lose access to this
+                  organization&rsquo;s memories and scopes.
+                </>
+              )}
             </>
           }
-          confirmLabel="Remove"
+          confirmLabel={removeTarget.userId === user?.id ? 'Leave organization' : 'Remove'}
           onConfirm={removeMember}
           onClose={() => setRemoveTarget(null)}
         />
@@ -343,8 +436,12 @@ function AddMemberModal({
   };
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent>
+    <Dialog
+      open
+      disablePointerDismissal={pending}
+      onOpenChange={(open) => !open && !pending && onClose()}
+    >
+      <DialogContent showCloseButton={!pending}>
         <DialogHeader>
           <DialogTitle>Add member</DialogTitle>
         </DialogHeader>
@@ -355,6 +452,12 @@ function AddMemberModal({
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}
+            <Alert>
+              <AlertTitle>Email addresses are not verified in this version.</AlertTitle>
+              <AlertDescription>
+                Only add account identities you have verified through a trusted channel outside Echo.
+              </AlertDescription>
+            </Alert>
             <Field>
               <FieldLabel htmlFor="member-email">Email</FieldLabel>
               <Input
@@ -365,6 +468,7 @@ function AddMemberModal({
                 placeholder="teammate@company.com"
                 autoFocus
                 required
+                maxLength={254}
               />
               <FieldDescription>They must already have an account on this Echo server.</FieldDescription>
             </Field>
@@ -491,7 +595,7 @@ function ScopesTab({
         </div>
       )}
 
-      {showCreate && (
+      {isAdmin && showCreate && (
         <CreateScopeModal
           onClose={() => setShowCreate(false)}
           onCreate={async (type, name) => {
@@ -503,7 +607,7 @@ function ScopesTab({
         />
       )}
 
-      {deleteTarget && (
+      {isAdmin && deleteTarget && (
         <ConfirmDialog
           title="Delete scope?"
           message={
@@ -525,7 +629,7 @@ function ScopesTab({
 }
 
 function ScopeMembers({ scopeId }: { scopeId: string }) {
-  const { data: members, mutate } = useScopeMembers(scopeId);
+  const { data: members, error: membersError, mutate } = useScopeMembers(scopeId);
   const [email, setEmail] = useState('');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -563,15 +667,21 @@ function ScopeMembers({ scopeId }: { scopeId: string }) {
 
   return (
     <div className="mt-3 border-t pt-3">
-      {members == null ? (
+      {members == null && membersError ? (
+        <RequestErrorState
+          error={membersError}
+          onRetry={() => mutate()}
+          title="Could not load scope members"
+        />
+      ) : members == null ? (
         <Spinner />
       ) : (
         <>
           {members.length === 0 && <div className="text-xs text-muted-foreground">No members yet.</div>}
           {members.map((member) => (
-            <div key={member.userId} className="flex items-center gap-2.5 py-1.5 text-xs/relaxed">
+            <div key={member.userId} className="flex flex-wrap items-center gap-2.5 py-1.5 text-xs/relaxed">
               <strong className="font-semibold">{member.name}</strong>
-              <span className="text-muted-foreground">{member.email}</span>
+              <span className="break-all text-muted-foreground">{member.email}</span>
               <span className="text-muted-foreground">
                 added <RelativeTime date={member.addedAt} />
               </span>
@@ -583,7 +693,7 @@ function ScopeMembers({ scopeId }: { scopeId: string }) {
           ))}
         </>
       )}
-      <form className="mt-2.5 flex items-center gap-2" onSubmit={(e) => void add(e)}>
+      <form className="mt-2.5 flex flex-wrap items-center gap-2" onSubmit={(e) => void add(e)}>
         <Input
           className="max-w-70"
           type="email"
@@ -591,6 +701,7 @@ function ScopeMembers({ scopeId }: { scopeId: string }) {
           onChange={(e) => setEmail(e.target.value)}
           placeholder="Add org member by email"
           aria-label="Add org member by email"
+          maxLength={254}
         />
         <Button variant="outline" size="sm" type="submit" disabled={pending || !email.trim()}>
           {pending ? <Spinner /> : 'Add'}
@@ -636,8 +747,12 @@ function CreateScopeModal({
   };
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent>
+    <Dialog
+      open
+      disablePointerDismissal={pending}
+      onOpenChange={(open) => !open && !pending && onClose()}
+    >
+      <DialogContent showCloseButton={!pending}>
         <DialogHeader>
           <DialogTitle>New scope</DialogTitle>
         </DialogHeader>
@@ -672,6 +787,7 @@ function CreateScopeModal({
                 placeholder="e.g. Platform Team"
                 autoFocus
                 required
+                maxLength={100}
               />
             </Field>
           </FieldGroup>
@@ -696,7 +812,16 @@ function CreateScopeModal({
 
 function OrgAudit({ orgId }: { orgId: string }) {
   const fetchPage = useCallback((q: AuditQuery) => api.getOrgAudit(orgId, q), [orgId]);
-  return <AuditTable fetchPage={fetchPage} scopeKey={`org:${orgId}`} />;
+  // Auth and API-key events never carry an org id, so their chips would
+  // always be empty here.
+  return (
+    <AuditTable
+      fetchPage={fetchPage}
+      scopeKey={`org:${orgId}`}
+      categories={['memory', 'org', 'scope']}
+      showActor
+    />
+  );
 }
 
 function SettingsTab({ org, isAdmin }: { org: Organization; isAdmin: boolean }) {
@@ -710,9 +835,13 @@ function SettingsTab({ org, isAdmin }: { org: Organization; isAdmin: boolean }) 
     setPending(true);
     try {
       await api.updateOrg(org.id, { name: name.trim() });
-      // Refresh the org (drives the page header + this form) and the orgs list.
-      await mutate(keys.org(org.id));
-      void mutate(keys.orgs);
+      // The server also renames the organization-level scope, so refresh every
+      // cached label that can surface the old name.
+      await Promise.allSettled([
+        mutate(keys.org(org.id)),
+        mutate(keys.orgs),
+        mutate(keys.scopes),
+      ]);
       toast.success('Organization renamed');
     } catch (err) {
       toast.error(errorMessage(err));
@@ -732,7 +861,13 @@ function SettingsTab({ org, isAdmin }: { org: Organization; isAdmin: boolean }) 
             <FieldGroup>
               <Field>
                 <FieldLabel htmlFor="org-rename">Name</FieldLabel>
-                <Input id="org-rename" value={name} onChange={(e) => setName(e.target.value)} required />
+                <Input
+                  id="org-rename"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                  maxLength={100}
+                />
               </Field>
               <Field>
                 <FieldLabel>Slug</FieldLabel>

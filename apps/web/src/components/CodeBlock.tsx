@@ -1,13 +1,31 @@
 import { useState } from 'react';
 import { CheckIcon, CopyIcon } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 
 async function copyText(text: string): Promise<boolean> {
   try {
-    await navigator.clipboard.writeText(text);
-    return true;
+    if (navigator.clipboard) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    // Fall through to the compatibility path below.
+  }
+
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  try {
+    document.body.appendChild(textarea);
+    textarea.select();
+    return document.execCommand('copy');
   } catch {
     return false;
+  } finally {
+    textarea.remove();
   }
 }
 
@@ -19,6 +37,8 @@ export function CodeBlock({ code }: { code: string }) {
     if (await copyText(code)) {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1600);
+    } else {
+      toast.error('Could not copy to the clipboard');
     }
   };
 
@@ -42,6 +62,8 @@ export function CopyButton({ text, label = 'Copy' }: { text: string; label?: str
     if (await copyText(text)) {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1600);
+    } else {
+      toast.error('Could not copy to the clipboard');
     }
   };
 

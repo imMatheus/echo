@@ -18,15 +18,17 @@ services:
     build: .
     restart: unless-stopped
     ports:
-      - "${PORT:-3246}:3246"
+      - "${BIND_ADDRESS:-127.0.0.1}:${PORT:-3246}:3246"
     environment:
-      DATABASE_URL: postgres://echo:${POSTGRES_PASSWORD:-echo}@db:5432/echo
+      DATABASE_URL: ${DATABASE_URL:-postgres://echo:echo@db:5432/echo}
       APP_URL: ${APP_URL:-}
       DISABLE_SIGNUP: ${DISABLE_SIGNUP:-false}
+      SESSION_TTL_DAYS: ${SESSION_TTL_DAYS:-30}
       TRUST_PROXY: ${TRUST_PROXY:-false}
       EMBEDDINGS_PROVIDER: ${EMBEDDINGS_PROVIDER:-none}
       EMBEDDINGS_MODEL: ${EMBEDDINGS_MODEL:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
       VOYAGE_API_KEY: ${VOYAGE_API_KEY:-}
       OLLAMA_URL: ${OLLAMA_URL:-}
       LOG_LEVEL: ${LOG_LEVEL:-info}

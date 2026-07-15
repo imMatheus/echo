@@ -78,6 +78,7 @@ export default function SignupPage() {
                 autoComplete="name"
                 required
                 autoFocus
+                maxLength={100}
               />
             </Field>
             <Field>
@@ -90,6 +91,7 @@ export default function SignupPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 autoComplete="email"
                 required
+                maxLength={254}
               />
             </Field>
             <Field>
@@ -101,6 +103,7 @@ export default function SignupPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 autoComplete="new-password"
                 minLength={8}
+                maxLength={128}
                 required
               />
               <FieldDescription>At least 8 characters.</FieldDescription>

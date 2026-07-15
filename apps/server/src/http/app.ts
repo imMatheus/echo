@@ -34,6 +34,38 @@ export async function buildApp(app: AppContext): Promise<FastifyInstance> {
     bodyLimit: 1024 * 1024,
   });
 
+  // The dashboard can display one-time API secrets and private memories. Keep
+  // API responses out of caches and apply a small, dependency-free baseline of
+  // browser hardening headers to every response.
+  f.addHook('onSend', async (req, reply, payload) => {
+    reply.header(
+      'content-security-policy',
+      "default-src 'self'; base-uri 'self'; connect-src 'self'; font-src 'self'; form-action 'self'; frame-ancestors 'none'; img-src 'self' data:; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'",
+    );
+    reply.header('permissions-policy', 'camera=(), geolocation=(), microphone=()');
+    reply.header('referrer-policy', 'no-referrer');
+    reply.header('x-content-type-options', 'nosniff');
+    reply.header('x-frame-options', 'DENY');
+    const isApiRequest = req.url.startsWith('/api') || req.url.startsWith('/mcp');
+    if (isApiRequest) {
+      reply.header('cache-control', 'no-store');
+    } else if (req.method === 'GET' || req.method === 'HEAD') {
+      // @fastify/static finalizes its generated headers after its setHeaders
+      // callback, so enforce the cache policy here. Vite fingerprints files
+      // under /assets; an HTML response for that path is the SPA fallback, not
+      // a cacheable asset.
+      const requestPath = req.url.split('?', 1)[0];
+      const contentType = String(reply.getHeader('content-type') ?? '');
+      const isFingerprintedAsset =
+        reply.statusCode < 400 && requestPath.startsWith('/assets/') && !contentType.startsWith('text/html');
+      reply.header(
+        'cache-control',
+        isFingerprintedAsset ? 'public, max-age=31536000, immutable' : 'no-cache',
+      );
+    }
+    return payload;
+  });
+
   await f.register(fastifyCookie);
   await f.register(fastifyRateLimit, {
     max: 300,
@@ -68,7 +100,12 @@ export async function buildApp(app: AppContext): Promise<FastifyInstance> {
   if (staticDir) {
     await f.register(fastifyStatic, { root: staticDir });
     f.setNotFoundHandler((req, reply) => {
-      if (req.url.startsWith('/api') || req.url.startsWith('/mcp') || req.method !== 'GET') {
+      if (
+        req.url.startsWith('/api') ||
+        req.url.startsWith('/mcp') ||
+        req.url.startsWith('/assets/') ||
+        req.method !== 'GET'
+      ) {
         return reply.code(404).send({ error: { code: 'not_found', message: 'Route not found' } });
       }
       return reply.sendFile('index.html'); // SPA fallback

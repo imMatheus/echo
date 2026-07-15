@@ -7,16 +7,21 @@ import { buildApp } from './http/app';
 import type { AppContext } from './types';
 
 const SWEEP_INTERVAL_MS = 60 * 60 * 1000;
+const STARTUP_DB_TIMEOUT_MS = 60_000;
 
-async function waitForDb(db: Db, attempts = 30): Promise<void> {
-  for (let i = 1; i <= attempts; i++) {
+async function waitForDb(db: Db, timeoutMs = STARTUP_DB_TIMEOUT_MS): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  let attempt = 0;
+  while (true) {
+    attempt += 1;
     try {
       await db.execute(sql`SELECT 1`);
       return;
     } catch (err) {
-      if (i === attempts) throw err;
-      console.log(`waiting for database (${i}/${attempts})...`);
-      await new Promise((r) => setTimeout(r, 1000));
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) throw err;
+      console.log(`waiting for database (attempt ${attempt})...`);
+      await new Promise((resolve) => setTimeout(resolve, Math.min(1000, remaining)));
     }
   }
 }

@@ -67,6 +67,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<'form'>)
             autoComplete="email"
             required
             autoFocus
+            maxLength={254}
           />
         </Field>
         <Field>
@@ -78,6 +79,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<'form'>)
             onChange={(e) => setPassword(e.target.value)}
             autoComplete="current-password"
             required
+            maxLength={128}
           />
         </Field>
         <Field>

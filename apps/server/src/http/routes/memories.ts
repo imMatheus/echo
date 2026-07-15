@@ -15,40 +15,47 @@ import { requireAuth } from '@/http/authn';
 
 const listQuerySchema = z.object({
   scopeId: z.string().uuid().optional(),
-  q: z.string().max(500).optional(),
+  q: z.string().trim().min(1).max(500).optional(),
   kind: z.enum(MEMORY_KINDS).optional(),
   sensitivity: z.enum(SENSITIVITIES).optional(),
-  sourceApp: z.string().max(64).optional(),
-  tag: z.string().max(64).optional(),
+  sourceApp: z.string().trim().min(1).max(64).optional(),
+  tag: z.string().trim().min(1).max(64).optional(),
   limit: z.coerce.number().int().min(1).max(200).optional(),
-  offset: z.coerce.number().int().min(0).optional(),
+  offset: z.coerce.number().int().min(0).max(100_000).optional(),
 });
 
+const futureDateTime = z
+  .string()
+  .datetime({ offset: true })
+  .refine((value) => Date.parse(value) > Date.now(), 'must be in the future');
+
+const tagSchema = z.string().trim().min(1).max(64);
+
 const createSchema = z.object({
-  content: z.string().min(1).max(10_000),
+  content: z.string().trim().min(1).max(10_000),
   scopeId: z.string().uuid().optional(),
   kind: z.enum(MEMORY_KINDS).optional(),
   confidence: z.number().min(0).max(1).optional(),
   sensitivity: z.enum(SENSITIVITIES).optional(),
-  tags: z.array(z.string().min(1).max(64)).max(20).optional(),
+  tags: z.array(tagSchema).max(20).optional(),
   metadata: z.record(z.unknown()).optional(),
-  expiresAt: z.string().datetime({ offset: true }).nullish(),
-  sourceApp: z.string().min(1).max(64).optional(),
+  expiresAt: futureDateTime.nullish(),
+  sourceApp: z.string().trim().min(1).max(64).optional(),
 });
 
 const updateSchema = z.object({
-  content: z.string().min(1).max(10_000).optional(),
+  content: z.string().trim().min(1).max(10_000).optional(),
   kind: z.enum(MEMORY_KINDS).optional(),
   confidence: z.number().min(0).max(1).optional(),
   sensitivity: z.enum(SENSITIVITIES).optional(),
-  tags: z.array(z.string().min(1).max(64)).max(20).optional(),
+  tags: z.array(tagSchema).max(20).optional(),
   metadata: z.record(z.unknown()).optional(),
-  expiresAt: z.string().datetime({ offset: true }).nullable().optional(),
+  expiresAt: futureDateTime.nullable().optional(),
   scopeId: z.string().uuid().optional(),
 });
 
 const searchSchema = z.object({
-  query: z.string().min(1).max(1000),
+  query: z.string().trim().min(1).max(1000),
   scopeIds: z.array(z.string().uuid()).max(100).optional(),
   limit: z.number().int().min(1).max(50).optional(),
 });

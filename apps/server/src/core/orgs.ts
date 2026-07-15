@@ -3,7 +3,9 @@ import { slugify } from '@echo/shared';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { orgMembers, organizations, scopeMembers, scopes, users } from '@/db/schema';
 import { badRequest, conflict, forbidden, notFound } from '@/lib/http-error';
+import { isUniqueViolation } from '@/lib/postgres';
 import type { AppContext, AuthContext } from '@/types';
+import { getScopeAccess } from './access';
 import { logAudit } from './audit';
 
 function mapOrg(row: { id: string; name: string; slug: string; createdAt: Date }): Organization {
@@ -38,21 +40,23 @@ export async function createOrg(
   input: { name: string; slug?: string },
 ): Promise<Organization> {
   const slug = input.slug ? slugify(input.slug) : slugify(input.name);
-  const org = await app.db.transaction(async (tx) => {
-    const dupe = await tx
-      .select({ id: organizations.id })
-      .from(organizations)
-      .where(eq(organizations.slug, slug))
-      .limit(1);
-    if (dupe.length) throw conflict(`Slug "${slug}" is already taken`);
-    const [created] = await tx
-      .insert(organizations)
-      .values({ name: input.name, slug, createdBy: ctx.userId })
-      .returning();
-    await tx.insert(orgMembers).values({ orgId: created.id, userId: ctx.userId, role: 'owner' });
-    await tx.insert(scopes).values({ type: 'organization', name: input.name, orgId: created.id });
-    return created;
-  });
+  let org: typeof organizations.$inferSelect;
+  try {
+    org = await app.db.transaction(async (tx) => {
+      const [created] = await tx
+        .insert(organizations)
+        .values({ name: input.name, slug, createdBy: ctx.userId })
+        .returning();
+      await tx.insert(orgMembers).values({ orgId: created.id, userId: ctx.userId, role: 'owner' });
+      await tx.insert(scopes).values({ type: 'organization', name: input.name, orgId: created.id });
+      return created;
+    });
+  } catch (error) {
+    if (isUniqueViolation(error, 'organizations_slug_unique')) {
+      throw conflict(`Slug "${slug}" is already taken`);
+    }
+    throw error;
+  }
   await logAudit(app, {
     action: 'org.create',
     actorUserId: ctx.userId,
@@ -89,18 +93,30 @@ export async function getOrg(app: AppContext, orgId: string, userId: string): Pr
 }
 
 export async function renameOrg(app: AppContext, ctx: AuthContext, orgId: string, name: string): Promise<Organization> {
-  await requireOrgRole(app, orgId, ctx.userId, ['owner', 'admin']);
-  const [row] = await app.db
-    .update(organizations)
-    .set({ name })
-    .where(eq(organizations.id, orgId))
-    .returning();
-  if (!row) throw notFound('Organization not found');
-  // Keep the org-level scope's display name in sync.
-  await app.db
-    .update(scopes)
-    .set({ name })
-    .where(and(eq(scopes.orgId, orgId), eq(scopes.type, 'organization')));
+  const row = await app.db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT id FROM organizations WHERE id = ${orgId} FOR UPDATE`);
+    const [membership] = await tx
+      .select({ role: orgMembers.role })
+      .from(orgMembers)
+      .where(and(eq(orgMembers.orgId, orgId), eq(orgMembers.userId, ctx.userId)))
+      .limit(1);
+    if (!membership) throw notFound('Organization not found');
+    if (membership.role !== 'owner' && membership.role !== 'admin') {
+      throw forbidden('Your role in this organization does not allow that');
+    }
+    const [updated] = await tx
+      .update(organizations)
+      .set({ name })
+      .where(eq(organizations.id, orgId))
+      .returning();
+    if (!updated) throw notFound('Organization not found');
+    // Keep the org-level scope's display name in sync atomically.
+    await tx
+      .update(scopes)
+      .set({ name })
+      .where(and(eq(scopes.orgId, orgId), eq(scopes.type, 'organization')));
+    return updated;
+  });
   await logAudit(app, {
     action: 'org.update',
     actorUserId: ctx.userId,
@@ -147,16 +163,29 @@ export async function addOrgMember(
   email: string,
   role: OrgRole,
 ): Promise<OrgMember> {
-  const actorRole = await requireOrgRole(app, orgId, ctx.userId, ['owner', 'admin']);
-  if (role === 'owner' && actorRole !== 'owner') throw forbidden('Only an owner can add another owner');
-  const [user] = await app.db.select().from(users).where(eq(users.email, email)).limit(1);
-  if (!user) throw notFound(`No Echo account exists for ${email} — they need to sign up first`);
-  const inserted = await app.db
-    .insert(orgMembers)
-    .values({ orgId, userId: user.id, role })
-    .onConflictDoNothing()
-    .returning({ createdAt: orgMembers.createdAt });
-  if (!inserted.length) throw conflict('That user is already a member of this organization');
+  const result = await app.db.transaction(async (tx) => {
+    const locked = await tx.execute(sql`SELECT id FROM organizations WHERE id = ${orgId} FOR UPDATE`);
+    if (!locked.rows.length) throw notFound('Organization not found');
+    const [actor] = await tx
+      .select({ role: orgMembers.role })
+      .from(orgMembers)
+      .where(and(eq(orgMembers.orgId, orgId), eq(orgMembers.userId, ctx.userId)))
+      .limit(1);
+    if (!actor) throw notFound('Organization not found');
+    if (actor.role !== 'owner' && actor.role !== 'admin') {
+      throw forbidden('Your role in this organization does not allow that');
+    }
+    if (role === 'owner' && actor.role !== 'owner') throw forbidden('Only an owner can add another owner');
+    const [user] = await tx.select().from(users).where(eq(users.email, email)).limit(1);
+    if (!user) throw notFound(`No Echo account exists for ${email} — they need to sign up first`);
+    const inserted = await tx
+      .insert(orgMembers)
+      .values({ orgId, userId: user.id, role })
+      .onConflictDoNothing()
+      .returning({ createdAt: orgMembers.createdAt });
+    if (!inserted.length) throw conflict('That user is already a member of this organization');
+    return { user, createdAt: inserted[0].createdAt };
+  });
   await logAudit(app, {
     action: 'org.member_add',
     actorUserId: ctx.userId,
@@ -165,15 +194,13 @@ export async function addOrgMember(
     orgId,
     details: { memberEmail: email, role },
   });
-  return { userId: user.id, email: user.email, name: user.name, role, joinedAt: inserted[0].createdAt.toISOString() };
-}
-
-async function countOwners(app: AppContext, orgId: string): Promise<number> {
-  const [row] = await app.db
-    .select({ n: sql<number>`count(*)::int` })
-    .from(orgMembers)
-    .where(and(eq(orgMembers.orgId, orgId), eq(orgMembers.role, 'owner')));
-  return row.n;
+  return {
+    userId: result.user.id,
+    email: result.user.email,
+    name: result.user.name,
+    role,
+    joinedAt: result.createdAt.toISOString(),
+  };
 }
 
 export async function updateOrgMemberRole(
@@ -183,31 +210,62 @@ export async function updateOrgMemberRole(
   targetUserId: string,
   newRole: OrgRole,
 ): Promise<OrgMember> {
-  const actorRole = await requireOrgRole(app, orgId, ctx.userId, ['owner', 'admin']);
-  const targetRole = await getOrgRole(app, orgId, targetUserId);
-  if (!targetRole) throw notFound('That user is not a member of this organization');
-  if ((newRole === 'owner' || targetRole === 'owner') && actorRole !== 'owner') {
-    throw forbidden('Only an owner can change owner roles');
-  }
-  if (targetRole === 'owner' && newRole !== 'owner' && (await countOwners(app, orgId)) <= 1) {
-    throw badRequest('An organization must keep at least one owner');
-  }
-  await app.db
-    .update(orgMembers)
-    .set({ role: newRole })
-    .where(and(eq(orgMembers.orgId, orgId), eq(orgMembers.userId, targetUserId)));
-  const [row] = await app.db
-    .select({
-      userId: orgMembers.userId,
-      role: orgMembers.role,
-      createdAt: orgMembers.createdAt,
-      email: users.email,
-      name: users.name,
-    })
-    .from(orgMembers)
-    .innerJoin(users, eq(users.id, orgMembers.userId))
-    .where(and(eq(orgMembers.orgId, orgId), eq(orgMembers.userId, targetUserId)))
-    .limit(1);
+  const row = await app.db.transaction(async (tx) => {
+    // Every owner-role mutation locks the organization row first. Concurrent
+    // demotions/removals across processes therefore cannot both observe two
+    // owners and leave the organization ownerless.
+    const locked = await tx.execute(sql`SELECT id FROM organizations WHERE id = ${orgId} FOR UPDATE`);
+    if (!locked.rows.length) throw notFound('Organization not found');
+    const [actor, target] = await Promise.all([
+      tx
+        .select({ role: orgMembers.role })
+        .from(orgMembers)
+        .where(and(eq(orgMembers.orgId, orgId), eq(orgMembers.userId, ctx.userId)))
+        .limit(1),
+      tx
+        .select({ role: orgMembers.role })
+        .from(orgMembers)
+        .where(and(eq(orgMembers.orgId, orgId), eq(orgMembers.userId, targetUserId)))
+        .limit(1),
+    ]);
+    const actorRole = actor[0]?.role as OrgRole | undefined;
+    const targetRole = target[0]?.role as OrgRole | undefined;
+    if (!actorRole) throw notFound('Organization not found');
+    if (actorRole !== 'owner' && actorRole !== 'admin') {
+      throw forbidden('Your role in this organization does not allow that');
+    }
+    if (!targetRole) throw notFound('That user is not a member of this organization');
+    if ((newRole === 'owner' || targetRole === 'owner') && actorRole !== 'owner') {
+      throw forbidden('Only an owner can change owner roles');
+    }
+    if (targetRole === 'owner' && newRole !== 'owner') {
+      const [owners] = await tx
+        .select({ n: sql<number>`count(*)::int` })
+        .from(orgMembers)
+        .where(and(eq(orgMembers.orgId, orgId), eq(orgMembers.role, 'owner')));
+      if (owners.n <= 1) throw badRequest('An organization must keep at least one owner');
+    }
+    const [updated] = await tx
+      .update(orgMembers)
+      .set({ role: newRole })
+      .where(and(eq(orgMembers.orgId, orgId), eq(orgMembers.userId, targetUserId)))
+      .returning({ userId: orgMembers.userId });
+    if (!updated) throw notFound('That user is not a member of this organization');
+    const [member] = await tx
+      .select({
+        userId: orgMembers.userId,
+        role: orgMembers.role,
+        createdAt: orgMembers.createdAt,
+        email: users.email,
+        name: users.name,
+      })
+      .from(orgMembers)
+      .innerJoin(users, eq(users.id, orgMembers.userId))
+      .where(and(eq(orgMembers.orgId, orgId), eq(orgMembers.userId, targetUserId)))
+      .limit(1);
+    if (!member) throw notFound('That user is not a member of this organization');
+    return member;
+  });
   await logAudit(app, {
     action: 'org.member_update',
     actorUserId: ctx.userId,
@@ -225,31 +283,54 @@ export async function removeOrgMember(
   orgId: string,
   targetUserId: string,
 ): Promise<void> {
-  const actorRole = await getOrgRole(app, orgId, ctx.userId);
-  if (!actorRole) throw notFound('Organization not found');
   const leavingSelf = targetUserId === ctx.userId;
-  if (!leavingSelf && actorRole !== 'owner' && actorRole !== 'admin') {
-    throw forbidden('Your role in this organization does not allow that');
-  }
-  const targetRole = await getOrgRole(app, orgId, targetUserId);
-  if (!targetRole) throw notFound('That user is not a member of this organization');
-  if (targetRole === 'owner' && !leavingSelf && actorRole !== 'owner') {
-    throw forbidden('Only an owner can remove another owner');
-  }
-  if (targetRole === 'owner' && (await countOwners(app, orgId)) <= 1) {
-    throw badRequest('An organization must keep at least one owner — transfer ownership first');
-  }
-  await app.db.delete(orgMembers).where(and(eq(orgMembers.orgId, orgId), eq(orgMembers.userId, targetUserId)));
-  // Also drop them from every scope inside the org.
-  await app.db.delete(scopeMembers).where(
-    and(
-      eq(scopeMembers.userId, targetUserId),
-      inArray(
-        scopeMembers.scopeId,
-        app.db.select({ id: scopes.id }).from(scopes).where(eq(scopes.orgId, orgId)),
+  await app.db.transaction(async (tx) => {
+    const locked = await tx.execute(sql`SELECT id FROM organizations WHERE id = ${orgId} FOR UPDATE`);
+    if (!locked.rows.length) throw notFound('Organization not found');
+    const [actor, target] = await Promise.all([
+      tx
+        .select({ role: orgMembers.role })
+        .from(orgMembers)
+        .where(and(eq(orgMembers.orgId, orgId), eq(orgMembers.userId, ctx.userId)))
+        .limit(1),
+      tx
+        .select({ role: orgMembers.role })
+        .from(orgMembers)
+        .where(and(eq(orgMembers.orgId, orgId), eq(orgMembers.userId, targetUserId)))
+        .limit(1),
+    ]);
+    const actorRole = actor[0]?.role as OrgRole | undefined;
+    const targetRole = target[0]?.role as OrgRole | undefined;
+    if (!actorRole) throw notFound('Organization not found');
+    if (!leavingSelf && actorRole !== 'owner' && actorRole !== 'admin') {
+      throw forbidden('Your role in this organization does not allow that');
+    }
+    if (!targetRole) throw notFound('That user is not a member of this organization');
+    if (targetRole === 'owner' && !leavingSelf && actorRole !== 'owner') {
+      throw forbidden('Only an owner can remove another owner');
+    }
+    if (targetRole === 'owner') {
+      const [owners] = await tx
+        .select({ n: sql<number>`count(*)::int` })
+        .from(orgMembers)
+        .where(and(eq(orgMembers.orgId, orgId), eq(orgMembers.role, 'owner')));
+      if (owners.n <= 1) {
+        throw badRequest('An organization must keep at least one owner — transfer ownership first');
+      }
+    }
+    const removed = await tx
+      .delete(orgMembers)
+      .where(and(eq(orgMembers.orgId, orgId), eq(orgMembers.userId, targetUserId)))
+      .returning({ userId: orgMembers.userId });
+    if (!removed.length) throw notFound('That user is not a member of this organization');
+    // Also drop them from every scope inside the org in the same transaction.
+    await tx.delete(scopeMembers).where(
+      and(
+        eq(scopeMembers.userId, targetUserId),
+        inArray(scopeMembers.scopeId, tx.select({ id: scopes.id }).from(scopes).where(eq(scopes.orgId, orgId))),
       ),
-    ),
-  );
+    );
+  });
   await logAudit(app, {
     action: leavingSelf ? 'org.member_leave' : 'org.member_remove',
     actorUserId: ctx.userId,
@@ -269,13 +350,25 @@ export async function createOrgScope(
   ctx: AuthContext,
   input: { orgId: string; type: OrgScopeType; name: string },
 ): Promise<{ id: string }> {
-  await requireOrgRole(app, input.orgId, ctx.userId, ['owner', 'admin']);
-  const [created] = await app.db
-    .insert(scopes)
-    .values({ type: input.type, name: input.name, orgId: input.orgId })
-    .returning({ id: scopes.id });
-  const scopeId = created.id;
-  await app.db.insert(scopeMembers).values({ scopeId, userId: ctx.userId });
+  const scopeId = await app.db.transaction(async (tx) => {
+    const locked = await tx.execute(sql`SELECT id FROM organizations WHERE id = ${input.orgId} FOR UPDATE`);
+    if (!locked.rows.length) throw notFound('Organization not found');
+    const [actor] = await tx
+      .select({ role: orgMembers.role })
+      .from(orgMembers)
+      .where(and(eq(orgMembers.orgId, input.orgId), eq(orgMembers.userId, ctx.userId)))
+      .limit(1);
+    if (!actor) throw notFound('Organization not found');
+    if (actor.role !== 'owner' && actor.role !== 'admin') {
+      throw forbidden('Your role in this organization does not allow that');
+    }
+    const [created] = await tx
+      .insert(scopes)
+      .values({ type: input.type, name: input.name, orgId: input.orgId })
+      .returning({ id: scopes.id });
+    await tx.insert(scopeMembers).values({ scopeId: created.id, userId: ctx.userId });
+    return created.id;
+  });
   await logAudit(app, {
     action: 'scope.create',
     actorUserId: ctx.userId,
@@ -307,9 +400,23 @@ async function getOrgScopeOrThrow(app: AppContext, scopeId: string): Promise<Org
 
 export async function deleteOrgScope(app: AppContext, ctx: AuthContext, scopeId: string): Promise<void> {
   const scope = await getOrgScopeOrThrow(app, scopeId);
-  if (scope.type === 'organization') throw badRequest('The organization scope cannot be deleted');
-  await requireOrgRole(app, scope.orgId, ctx.userId, ['owner', 'admin']);
-  await app.db.delete(scopes).where(eq(scopes.id, scopeId)); // memories cascade
+  await app.db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT id FROM organizations WHERE id = ${scope.orgId} FOR UPDATE`);
+    const [actor] = await tx
+      .select({ role: orgMembers.role })
+      .from(orgMembers)
+      .where(and(eq(orgMembers.orgId, scope.orgId), eq(orgMembers.userId, ctx.userId)))
+      .limit(1);
+    if (!actor) throw notFound('Scope not found');
+    if (actor.role !== 'owner' && actor.role !== 'admin') {
+      throw forbidden('Your role in this organization does not allow that');
+    }
+    // Check the special type only after authorization to avoid a cross-org
+    // existence/type oracle for callers who happen to know a scope UUID.
+    if (scope.type === 'organization') throw badRequest('The organization scope cannot be deleted');
+    const deleted = await tx.delete(scopes).where(eq(scopes.id, scopeId)).returning({ id: scopes.id });
+    if (!deleted.length) throw notFound('Scope not found');
+  }); // memories cascade
   await logAudit(app, {
     action: 'scope.delete',
     actorUserId: ctx.userId,
@@ -323,8 +430,22 @@ export async function deleteOrgScope(app: AppContext, ctx: AuthContext, scopeId:
 
 export async function listScopeMembers(app: AppContext, ctx: AuthContext, scopeId: string): Promise<ScopeMember[]> {
   const scope = await getOrgScopeOrThrow(app, scopeId);
-  const role = await getOrgRole(app, scope.orgId, ctx.userId);
-  if (!role) throw notFound('Scope not found');
+  const access = await getScopeAccess(app, ctx.userId, scopeId, false);
+  if (!access) throw notFound('Scope not found');
+  if (scope.type === 'organization') {
+    const rows = await app.db
+      .select({
+        userId: orgMembers.userId,
+        createdAt: orgMembers.createdAt,
+        email: users.email,
+        name: users.name,
+      })
+      .from(orgMembers)
+      .innerJoin(users, eq(users.id, orgMembers.userId))
+      .where(eq(orgMembers.orgId, scope.orgId))
+      .orderBy(orgMembers.createdAt);
+    return rows.map((r) => ({ userId: r.userId, email: r.email, name: r.name, addedAt: r.createdAt.toISOString() }));
+  }
   const rows = await app.db
     .select({
       userId: scopeMembers.userId,
@@ -341,18 +462,34 @@ export async function listScopeMembers(app: AppContext, ctx: AuthContext, scopeI
 
 export async function addScopeMember(app: AppContext, ctx: AuthContext, scopeId: string, email: string): Promise<ScopeMember> {
   const scope = await getOrgScopeOrThrow(app, scopeId);
-  if (scope.type === 'organization') throw badRequest('Organization scope membership is the org member list');
-  await requireOrgRole(app, scope.orgId, ctx.userId, ['owner', 'admin']);
-  const [user] = await app.db.select().from(users).where(eq(users.email, email)).limit(1);
-  if (!user) throw notFound(`No Echo account exists for ${email}`);
-  const memberRole = await getOrgRole(app, scope.orgId, user.id);
-  if (!memberRole) throw badRequest('That user must be a member of the organization first');
-  const inserted = await app.db
-    .insert(scopeMembers)
-    .values({ scopeId, userId: user.id })
-    .onConflictDoNothing()
-    .returning({ createdAt: scopeMembers.createdAt });
-  if (!inserted.length) throw conflict('That user is already a member of this scope');
+  const result = await app.db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT id FROM organizations WHERE id = ${scope.orgId} FOR UPDATE`);
+    const [actor] = await tx
+      .select({ role: orgMembers.role })
+      .from(orgMembers)
+      .where(and(eq(orgMembers.orgId, scope.orgId), eq(orgMembers.userId, ctx.userId)))
+      .limit(1);
+    if (!actor) throw notFound('Scope not found');
+    if (actor.role !== 'owner' && actor.role !== 'admin') {
+      throw forbidden('Your role in this organization does not allow that');
+    }
+    if (scope.type === 'organization') throw badRequest('Organization scope membership is the org member list');
+    const [user] = await tx.select().from(users).where(eq(users.email, email)).limit(1);
+    if (!user) throw notFound(`No Echo account exists for ${email}`);
+    const [membership] = await tx
+      .select({ role: orgMembers.role })
+      .from(orgMembers)
+      .where(and(eq(orgMembers.orgId, scope.orgId), eq(orgMembers.userId, user.id)))
+      .limit(1);
+    if (!membership) throw badRequest('That user must be a member of the organization first');
+    const inserted = await tx
+      .insert(scopeMembers)
+      .values({ scopeId, userId: user.id })
+      .onConflictDoNothing()
+      .returning({ createdAt: scopeMembers.createdAt });
+    if (!inserted.length) throw conflict('That user is already a member of this scope');
+    return { user, createdAt: inserted[0].createdAt };
+  });
   await logAudit(app, {
     action: 'scope.member_add',
     actorUserId: ctx.userId,
@@ -363,21 +500,33 @@ export async function addScopeMember(app: AppContext, ctx: AuthContext, scopeId:
     details: { memberEmail: email },
   });
   return {
-    userId: user.id,
-    email: user.email,
-    name: user.name,
-    addedAt: inserted[0].createdAt.toISOString(),
+    userId: result.user.id,
+    email: result.user.email,
+    name: result.user.name,
+    addedAt: result.createdAt.toISOString(),
   };
 }
 
 export async function removeScopeMember(app: AppContext, ctx: AuthContext, scopeId: string, targetUserId: string): Promise<void> {
   const scope = await getOrgScopeOrThrow(app, scopeId);
-  await requireOrgRole(app, scope.orgId, ctx.userId, ['owner', 'admin']);
-  const removed = await app.db
-    .delete(scopeMembers)
-    .where(and(eq(scopeMembers.scopeId, scopeId), eq(scopeMembers.userId, targetUserId)))
-    .returning({ userId: scopeMembers.userId });
-  if (!removed.length) throw notFound('That user is not a member of this scope');
+  await app.db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT id FROM organizations WHERE id = ${scope.orgId} FOR UPDATE`);
+    const [actor] = await tx
+      .select({ role: orgMembers.role })
+      .from(orgMembers)
+      .where(and(eq(orgMembers.orgId, scope.orgId), eq(orgMembers.userId, ctx.userId)))
+      .limit(1);
+    if (!actor) throw notFound('Scope not found');
+    if (actor.role !== 'owner' && actor.role !== 'admin') {
+      throw forbidden('Your role in this organization does not allow that');
+    }
+    if (scope.type === 'organization') throw badRequest('Organization scope membership is the org member list');
+    const removed = await tx
+      .delete(scopeMembers)
+      .where(and(eq(scopeMembers.scopeId, scopeId), eq(scopeMembers.userId, targetUserId)))
+      .returning({ userId: scopeMembers.userId });
+    if (!removed.length) throw notFound('That user is not a member of this scope');
+  });
   await logAudit(app, {
     action: 'scope.member_remove',
     actorUserId: ctx.userId,

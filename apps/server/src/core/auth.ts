@@ -3,6 +3,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import { scopes, sessions, users } from '@/db/schema';
 import { generateSessionToken, hashPassword, sha256Hex, verifyPassword } from '@/lib/crypto';
 import { conflict, unauthorized } from '@/lib/http-error';
+import { isUniqueViolation } from '@/lib/postgres';
 import type { AppContext } from '@/types';
 import { logAudit } from './audit';
 
@@ -22,21 +23,24 @@ export async function signup(
   input: { email: string; password: string; name: string },
 ): Promise<User> {
   const passwordHash = await hashPassword(input.password);
-  // Drizzle rolls the transaction back automatically if the callback throws.
-  const user = await app.db.transaction(async (tx) => {
-    const existing = await tx
-      .select({ id: users.id })
-      .from(users)
-      .where(eq(users.email, input.email))
-      .limit(1);
-    if (existing.length) throw conflict('An account with that email already exists');
-    const [created] = await tx
-      .insert(users)
-      .values({ email: input.email, name: input.name, passwordHash })
-      .returning();
-    await tx.insert(scopes).values({ type: 'personal', name: 'Personal', userId: created.id });
-    return created;
-  });
+  let user: UserRow;
+  try {
+    // The unique constraint, rather than a racy preflight SELECT, arbitrates
+    // concurrent signups for the same case-insensitive email.
+    user = await app.db.transaction(async (tx) => {
+      const [created] = await tx
+        .insert(users)
+        .values({ email: input.email, name: input.name, passwordHash })
+        .returning();
+      await tx.insert(scopes).values({ type: 'personal', name: 'Personal', userId: created.id });
+      return created;
+    });
+  } catch (error) {
+    if (isUniqueViolation(error, 'users_email_unique')) {
+      throw conflict('An account with that email already exists');
+    }
+    throw error;
+  }
   await logAudit(app, { action: 'auth.signup', actorUserId: user.id, details: { email: user.email } });
   return mapUser(user);
 }
@@ -94,8 +98,17 @@ export async function getPersonalScopeId(app: AppContext, userId: string): Promi
     const [created] = await app.db
       .insert(scopes)
       .values({ type: 'personal', name: 'Personal', userId })
+      .onConflictDoNothing()
       .returning({ id: scopes.id });
-    return created.id;
+    if (created) return created.id;
+    // A concurrent request won the partial unique-index race.
+    const [winner] = await app.db
+      .select({ id: scopes.id })
+      .from(scopes)
+      .where(and(eq(scopes.type, 'personal'), eq(scopes.userId, userId)))
+      .limit(1);
+    if (winner) return winner.id;
+    throw unauthorized('Account no longer exists');
   }
   return row.id;
 }

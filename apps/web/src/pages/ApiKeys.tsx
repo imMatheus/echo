@@ -14,11 +14,13 @@ import { EmptyState } from '../components/EmptyState';
 import { PageHeader } from '../components/PageHeader';
 import { PageLoading } from '../components/PageLoading';
 import { RelativeTime } from '../components/RelativeTime';
+import { RequestErrorState } from '../components/RequestErrorState';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogFooter,
   DialogHeader,
@@ -38,7 +40,7 @@ import {
 import { cn } from '@/lib/utils';
 
 export default function ApiKeysPage() {
-  const { data: keys, mutate } = useApiKeys();
+  const { data: keys, error, mutate } = useApiKeys();
   const [showCreate, setShowCreate] = useState(false);
   const [newSecret, setNewSecret] = useState<{ name: string; secret: string } | null>(null);
   const [revokeTarget, setRevokeTarget] = useState<ApiKeyInfo | null>(null);
@@ -76,7 +78,9 @@ export default function ApiKeysPage() {
         }
       />
 
-      {!keys ? (
+      {!keys && error ? (
+        <RequestErrorState error={error} onRetry={() => mutate()} />
+      ) : !keys ? (
         <PageLoading />
       ) : keys.length === 0 ? (
         <EmptyState
@@ -157,8 +161,14 @@ export default function ApiKeysPage() {
       )}
 
       {newSecret && (
-        <Dialog open onOpenChange={(open) => !open && setNewSecret(null)}>
-          <DialogContent className="sm:max-w-[560px]">
+        <Dialog
+          open
+          disablePointerDismissal
+          onOpenChange={(open, details) => {
+            if (!open && details.reason === 'close-press') setNewSecret(null);
+          }}
+        >
+          <DialogContent className="sm:max-w-[560px]" showCloseButton={false}>
             <DialogHeader>
               <DialogTitle>Key created: {newSecret.name}</DialogTitle>
             </DialogHeader>
@@ -171,7 +181,7 @@ export default function ApiKeysPage() {
             </Alert>
             <CodeBlock code={newSecret.secret} />
             <DialogFooter>
-              <Button onClick={() => setNewSecret(null)}>Done</Button>
+              <DialogClose render={<Button />}>I’ve saved this key</DialogClose>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -228,8 +238,12 @@ function CreateKeyModal({
   };
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent>
+    <Dialog
+      open
+      disablePointerDismissal={pending}
+      onOpenChange={(open) => !open && !pending && onClose()}
+    >
+      <DialogContent showCloseButton={!pending}>
         <DialogHeader>
           <DialogTitle>Create API key</DialogTitle>
         </DialogHeader>
@@ -249,6 +263,7 @@ function CreateKeyModal({
                 placeholder="e.g. Laptop — Claude Code"
                 autoFocus
                 required
+                maxLength={100}
               />
             </Field>
             <Field>
@@ -258,6 +273,7 @@ function CreateKeyModal({
                 value={sourceApp}
                 onChange={(e) => setSourceApp(e.target.value)}
                 placeholder="claude-code, cursor, chatgpt…"
+                maxLength={64}
               />
               <FieldDescription>Label attached to memories written with this key.</FieldDescription>
             </Field>

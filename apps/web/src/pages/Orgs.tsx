@@ -12,6 +12,7 @@ import { RoleBadge } from '@/components/Badge';
 import { EmptyState } from '@/components/EmptyState';
 import { PageHeader } from '@/components/PageHeader';
 import { PageLoading } from '@/components/PageLoading';
+import { RequestErrorState } from '@/components/RequestErrorState';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
@@ -26,7 +27,7 @@ import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
 
 export default function OrgsPage() {
-  const { data: orgs } = useOrgs();
+  const { data: orgs, error, mutate } = useOrgs();
   const [showCreate, setShowCreate] = useState(false);
 
   return (
@@ -42,7 +43,9 @@ export default function OrgsPage() {
         }
       />
 
-      {!orgs ? (
+      {!orgs && error ? (
+        <RequestErrorState error={error} onRetry={() => mutate()} />
+      ) : !orgs ? (
         <PageLoading />
       ) : orgs.length === 0 ? (
         <EmptyState
@@ -57,14 +60,16 @@ export default function OrgsPage() {
           }
         />
       ) : (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3.5">
+        <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-[repeat(auto-fill,minmax(240px,1fr))]">
           {orgs.map((org) => (
             <Link
               key={org.id}
               to={`/orgs/${org.id}`}
               className="block rounded-xl border bg-card p-4 transition-colors hover:border-ring/40 hover:bg-input/10"
             >
-              <h3 className="mb-2 font-heading text-sm font-semibold tracking-tight">{org.name}</h3>
+              <h3 className="mb-2 font-heading text-sm font-semibold tracking-tight [overflow-wrap:anywhere]">
+                {org.name}
+              </h3>
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <RoleBadge role={org.role} />
                 <span>
@@ -119,8 +124,12 @@ function CreateOrgModal({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent>
+    <Dialog
+      open
+      disablePointerDismissal={pending}
+      onOpenChange={(open) => !open && !pending && onClose()}
+    >
+      <DialogContent showCloseButton={!pending}>
         <DialogHeader>
           <DialogTitle>New organization</DialogTitle>
         </DialogHeader>
@@ -140,6 +149,7 @@ function CreateOrgModal({ onClose }: { onClose: () => void }) {
                 placeholder="Acme Inc."
                 autoFocus
                 required
+                maxLength={100}
               />
             </Field>
             <Field>
@@ -153,6 +163,8 @@ function CreateOrgModal({ onClose }: { onClose: () => void }) {
                   setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]+/g, '-'));
                 }}
                 placeholder="acme-inc"
+                minLength={2}
+                maxLength={48}
               />
               <FieldDescription>A short URL-friendly identifier.</FieldDescription>
             </Field>

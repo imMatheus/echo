@@ -1,8 +1,13 @@
 {
   "name": "echo-context-mcp",
   "version": "0.1.0",
+  "private": true,
   "description": "stdio MCP bridge for Echo — connects local-only MCP clients to a remote Echo server",
+  "license": "MIT",
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "bin": {
     "echo-context-mcp": "dist/index.js"
   },
@@ -11,6 +16,7 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "test:smoke": "node test/smoke.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

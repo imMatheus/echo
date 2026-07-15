@@ -8,14 +8,15 @@ import type {
   SearchMemoriesResponse,
   UpdateMemoryRequest,
 } from '@echo/shared';
-import { and, count, desc, eq, ilike, inArray, isNotNull, isNull, type SQL, sql } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, isNotNull, isNull, type SQL, sql } from 'drizzle-orm';
 import type { PgUpdateSetSource } from 'drizzle-orm/pg-core';
 import { memories, scopes, sessions, users } from '@/db/schema';
 import { toVectorLiteral } from '@/lib/embeddings';
 import { forbidden, notFound } from '@/lib/http-error';
+import { escapeLikePattern } from '@/lib/sql';
 import type { AppContext, AuthContext } from '@/types';
 import { getAccessibleScopes, getScopeAccess, type ScopeAccess } from './access';
-import { logAudit } from './audit';
+import { type AuditEvent, logAudit, logAuditMany } from './audit';
 
 const MEMORY_COLS = `
   m.id, m.scope_id, m.content, m.kind, m.confidence, m.sensitivity, m.source_app,
@@ -59,6 +60,33 @@ function mapMemory(row: MemoryRow): Memory {
   };
 }
 
+/** Build the exact response written by a mutation while its transaction locks are still held. */
+function mapMutationMemory(
+  row: typeof memories.$inferSelect,
+  scope: ScopeAccess,
+  createdByName: string | null,
+): Memory {
+  return {
+    id: row.id,
+    scopeId: row.scopeId,
+    scopeType: scope.type,
+    scopeName: scope.name,
+    content: row.content,
+    kind: row.kind as Memory['kind'],
+    confidence: Number(row.confidence),
+    sensitivity: row.sensitivity as Memory['sensitivity'],
+    sourceApp: row.sourceApp,
+    tags: row.tags ?? [],
+    metadata: (row.metadata ?? {}) as Record<string, unknown>,
+    createdBy: row.createdBy,
+    createdByName,
+    embeddingModel: row.embeddingModel,
+    expiresAt: row.expiresAt?.toISOString() ?? null,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
 // Column set shared by the query-builder reads (fetch/list). Snake_case keys keep
 // the shape mapMemory already expects.
 const memorySelect = {
@@ -86,6 +114,49 @@ const memorySelect = {
 const notGone = (): SQL =>
   sql`${memories.deletedAt} IS NULL AND (${memories.expiresAt} IS NULL OR ${memories.expiresAt} > now())`;
 
+interface LockedScopeAccess extends Record<string, unknown> {
+  id: string;
+  orgId: string | null;
+  canManage: boolean;
+}
+
+/**
+ * Re-check access inside a mutation transaction. Organization membership
+ * changes take an UPDATE lock on the org row; memory mutations first take a
+ * compatible SHARE lock, so access cannot be revoked between this query and
+ * the write while unrelated writes in the same organization remain concurrent.
+ */
+const lockedScopeAccessQuery = (userId: string, scopeId: string): SQL => sql`
+  SELECT s.id,
+         s.org_id AS "orgId",
+         (s.type = 'personal' OR om.role IN ('owner', 'admin')) AS "canManage"
+  FROM scopes s
+  LEFT JOIN org_members om ON om.org_id = s.org_id AND om.user_id = ${userId}
+  LEFT JOIN scope_members sm ON sm.scope_id = s.id AND sm.user_id = ${userId}
+  WHERE s.id = ${scopeId}
+    AND (
+      (s.type = 'personal' AND s.user_id = ${userId})
+      OR (
+        om.user_id IS NOT NULL
+        AND (s.type = 'organization' OR sm.user_id IS NOT NULL OR om.role IN ('owner', 'admin'))
+      )
+    )
+  FOR SHARE OF s`;
+
+/** Tags are identifiers, not display copy: keep one lowercase, trimmed occurrence. */
+export function normalizeTags(input: string[] | undefined): string[] {
+  if (!input) return [];
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+  for (const value of input) {
+    const tag = value.trim().toLowerCase();
+    if (!tag || seen.has(tag)) continue;
+    seen.add(tag);
+    normalized.push(tag);
+  }
+  return normalized;
+}
+
 /** Embedding failures must never fail a write — the memory is stored without a vector. */
 async function embedBestEffort(app: AppContext, text: string): Promise<{ vector: string; model: string } | null> {
   if (!app.embeddings) return null;
@@ -101,34 +172,45 @@ async function embedBestEffort(app: AppContext, text: string): Promise<{ vector:
 export async function createMemory(app: AppContext, ctx: AuthContext, input: CreateMemoryRequest): Promise<Memory> {
   let scope: ScopeAccess | null;
   if (input.scopeId) {
-    scope = await getScopeAccess(app, ctx.userId, input.scopeId);
+    scope = await getScopeAccess(app, ctx.userId, input.scopeId, false);
   } else {
-    const scopes = await getAccessibleScopes(app, ctx.userId);
+    const scopes = await getAccessibleScopes(app, ctx.userId, false);
     scope = scopes.find((s) => s.type === 'personal') ?? null;
   }
   if (!scope) throw notFound('Scope not found');
   if (!scope.canWrite) throw forbidden('You cannot write to this scope');
 
   const embedded = await embedBestEffort(app, input.content);
-  const [created] = await app.db
-    .insert(memories)
-    .values({
-      scopeId: scope.id,
-      content: input.content,
-      kind: input.kind ?? 'explicit',
-      confidence: input.confidence ?? 1,
-      sensitivity: input.sensitivity ?? 'normal',
-      sourceApp: input.sourceApp?.trim() || ctx.sourceApp,
-      tags: input.tags ?? [],
-      metadata: input.metadata ?? {},
-      createdBy: ctx.userId,
-      apiKeyId: ctx.apiKeyId,
-      embedding: embedded ? sql`${embedded.vector}::vector` : null,
-      embeddingModel: embedded?.model ?? null,
-      expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
-    })
-    .returning({ id: memories.id });
-  const memory = await fetchMemory(app, created.id);
+  const memory = await app.db.transaction(async (tx) => {
+    if (scope.orgId) {
+      await tx.execute(sql`SELECT id FROM organizations WHERE id = ${scope.orgId} FOR SHARE`);
+    }
+    const access = await tx.execute<LockedScopeAccess>(lockedScopeAccessQuery(ctx.userId, scope.id));
+    const lockedScope = access.rows[0];
+    if (!lockedScope || lockedScope.orgId !== scope.orgId) throw notFound('Scope not found');
+
+    const [created] = await tx
+      .insert(memories)
+      .values({
+        scopeId: scope.id,
+        content: input.content,
+        kind: input.kind ?? 'explicit',
+        confidence: input.confidence ?? 1,
+        sensitivity: input.sensitivity ?? 'normal',
+        sourceApp: input.sourceApp?.trim() || ctx.sourceApp,
+        tags: normalizeTags(input.tags),
+        metadata: input.metadata ?? {},
+        createdBy: ctx.userId,
+        apiKeyId: ctx.apiKeyId,
+        embedding: embedded ? sql`${embedded.vector}::vector` : null,
+        embeddingModel: embedded?.model ?? null,
+        expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
+      })
+      .returning();
+    // Returning the transaction snapshot avoids a post-commit fetch observing a
+    // later move or rewrite in a scope the original caller cannot access.
+    return mapMutationMemory(created, scope, ctx.userName);
+  });
   await logAudit(app, {
     action: 'memory.create',
     actorUserId: ctx.userId,
@@ -142,13 +224,16 @@ export async function createMemory(app: AppContext, ctx: AuthContext, input: Cre
   return memory;
 }
 
-async function fetchMemory(app: AppContext, id: string): Promise<Memory> {
+type MemoryReadMode = 'active' | 'undeleted' | 'retained';
+
+async function fetchMemory(app: AppContext, id: string, mode: MemoryReadMode = 'active'): Promise<Memory> {
+  const visibility = mode === 'active' ? notGone() : mode === 'undeleted' ? isNull(memories.deletedAt) : undefined;
   const [row] = await app.db
     .select(memorySelect)
     .from(memories)
     .innerJoin(scopes, eq(scopes.id, memories.scopeId))
     .leftJoin(users, eq(users.id, memories.createdBy))
-    .where(and(eq(memories.id, id), isNull(memories.deletedAt)))
+    .where(and(eq(memories.id, id), visibility))
     .limit(1);
   if (!row) throw notFound('Memory not found');
   return mapMemory(row);
@@ -159,9 +244,10 @@ async function getMemoryWithAccess(
   app: AppContext,
   ctx: AuthContext,
   id: string,
+  mode: MemoryReadMode = 'active',
 ): Promise<{ memory: Memory; scope: ScopeAccess }> {
-  const memory = await fetchMemory(app, id);
-  const scope = await getScopeAccess(app, ctx.userId, memory.scopeId);
+  const memory = await fetchMemory(app, id, mode);
+  const scope = await getScopeAccess(app, ctx.userId, memory.scopeId, false);
   if (!scope) throw notFound('Memory not found');
   return { memory, scope };
 }
@@ -188,23 +274,28 @@ export async function listMemories(
   query: ListMemoriesQuery,
 ): Promise<ListMemoriesResponse> {
   let scopeIds: string[];
-  let orgId: string | null = null;
+  let requestedOrgId: string | null = null;
   if (query.scopeId) {
-    const scope = await getScopeAccess(app, ctx.userId, query.scopeId);
+    const scope = await getScopeAccess(app, ctx.userId, query.scopeId, false);
     if (!scope) throw notFound('Scope not found');
     scopeIds = [scope.id];
-    orgId = scope.orgId;
+    requestedOrgId = scope.orgId;
   } else {
-    scopeIds = (await getAccessibleScopes(app, ctx.userId)).map((s) => s.id);
+    scopeIds = (await getAccessibleScopes(app, ctx.userId, false)).map((s) => s.id);
   }
   if (scopeIds.length === 0) return { memories: [], total: 0 };
 
   const conditions: SQL[] = [inArray(memories.scopeId, scopeIds), notGone()];
-  if (query.q) conditions.push(ilike(memories.content, `%${query.q}%`));
+  if (query.q) {
+    conditions.push(sql`${memories.content} ILIKE ${`%${escapeLikePattern(query.q)}%`} ESCAPE E'\\\\'`);
+  }
   if (query.kind) conditions.push(eq(memories.kind, query.kind));
   if (query.sensitivity) conditions.push(eq(memories.sensitivity, query.sensitivity));
   if (query.sourceApp) conditions.push(eq(memories.sourceApp, query.sourceApp));
-  if (query.tag) conditions.push(sql`${query.tag} = ANY(${memories.tags})`);
+  if (query.tag) {
+    const tag = query.tag.trim().toLowerCase();
+    conditions.push(sql`${memories.tags} @> ARRAY[${tag}]::text[]`);
+  }
   const where = and(...conditions);
   const limit = Math.min(Math.max(query.limit ?? 50, 1), 200);
   const offset = Math.max(query.offset ?? 0, 0);
@@ -223,15 +314,45 @@ export async function listMemories(
   ]);
 
   if (ctx.via === 'api_key') {
-    await logAudit(app, {
-      action: 'memory.list',
-      actorUserId: ctx.userId,
-      apiKeyId: ctx.apiKeyId,
-      sourceApp: ctx.sourceApp,
-      scopeId: query.scopeId ?? null,
-      orgId,
-      details: { count: rows.length, filters: { scopeId: query.scopeId, kind: query.kind, tag: query.tag } },
-    });
+    // Keep the caller's full list event in their own audit trail. Add separate,
+    // query-free organization events for every org whose data was returned so
+    // an unscoped list_context call cannot bypass shared-data auditing.
+    const byOrg = new Map<string, string[]>();
+    for (const row of rows) {
+      if (!row.scope_org_id) continue;
+      const ids = byOrg.get(row.scope_org_id) ?? [];
+      ids.push(row.id);
+      byOrg.set(row.scope_org_id, ids);
+    }
+    if (requestedOrgId && !byOrg.has(requestedOrgId)) byOrg.set(requestedOrgId, []);
+    await logAuditMany(app, [
+      {
+        action: 'memory.list',
+        actorUserId: ctx.userId,
+        apiKeyId: ctx.apiKeyId,
+        sourceApp: ctx.sourceApp,
+        scopeId: query.scopeId ?? null,
+        details: {
+          count: rows.length,
+          filters: {
+            scopeId: query.scopeId,
+            q: query.q,
+            kind: query.kind,
+            sensitivity: query.sensitivity,
+            sourceApp: query.sourceApp,
+            tag: query.tag,
+          },
+        },
+      },
+      ...[...byOrg].map<AuditEvent>(([rowOrgId, memoryIds]) => ({
+        action: 'memory.list',
+        actorUserId: ctx.userId,
+        apiKeyId: ctx.apiKeyId,
+        sourceApp: ctx.sourceApp,
+        orgId: rowOrgId,
+        details: { count: memoryIds.length, memoryIds, orgFanout: true },
+      })),
+    ]);
   }
   return { memories: rows.map(mapMemory), total: totalRes[0].n };
 }
@@ -244,7 +365,7 @@ export async function searchMemories(
   ctx: AuthContext,
   req: SearchMemoriesRequest,
 ): Promise<SearchMemoriesResponse> {
-  const accessible = await getAccessibleScopes(app, ctx.userId);
+  const accessible = await getAccessibleScopes(app, ctx.userId, false);
   let scopeIds = accessible.map((s) => s.id);
   if (req.scopeIds && req.scopeIds.length > 0) {
     const allowed = new Set(scopeIds);
@@ -337,24 +458,22 @@ export async function searchMemories(
       byOrg.set(row.scope_org_id, list);
     }
   }
-  await Promise.all([
-    logAudit(app, {
+  await logAuditMany(app, [
+    {
       action: 'memory.recall',
       actorUserId: ctx.userId,
       apiKeyId: ctx.apiKeyId,
       sourceApp: ctx.sourceApp,
       details: { query: req.query, count: results.length, mode: embedded ? 'hybrid' : 'fts' },
-    }),
-    ...[...byOrg].map(([orgId, memoryIds]) =>
-      logAudit(app, {
-        action: 'memory.recall',
-        actorUserId: ctx.userId,
-        apiKeyId: ctx.apiKeyId,
-        sourceApp: ctx.sourceApp,
-        orgId,
-        details: { count: memoryIds.length, memoryIds },
-      }),
-    ),
+    },
+    ...[...byOrg].map<AuditEvent>(([orgId, memoryIds]) => ({
+      action: 'memory.recall',
+      actorUserId: ctx.userId,
+      apiKeyId: ctx.apiKeyId,
+      sourceApp: ctx.sourceApp,
+      orgId,
+      details: { count: memoryIds.length, memoryIds, orgFanout: true },
+    })),
   ]);
 
   return { results, mode: embedded ? 'hybrid' : 'fts' };
@@ -377,7 +496,7 @@ export async function updateMemory(
 
   let targetScope = scope;
   if (input.scopeId && input.scopeId !== memory.scopeId) {
-    const next = await getScopeAccess(app, ctx.userId, input.scopeId);
+    const next = await getScopeAccess(app, ctx.userId, input.scopeId, false);
     if (!next) throw notFound('Target scope not found');
     if (!next.canWrite) throw forbidden('You cannot write to the target scope');
     targetScope = next;
@@ -393,38 +512,117 @@ export async function updateMemory(
   if (input.kind !== undefined) set.kind = input.kind;
   if (input.confidence !== undefined) set.confidence = input.confidence;
   if (input.sensitivity !== undefined) set.sensitivity = input.sensitivity;
-  if (input.tags !== undefined) set.tags = input.tags;
+  if (input.tags !== undefined) set.tags = normalizeTags(input.tags);
   if (input.metadata !== undefined) set.metadata = input.metadata;
   if (input.expiresAt !== undefined) set.expiresAt = input.expiresAt ? new Date(input.expiresAt) : null;
   if (targetScope.id !== memory.scopeId) set.scopeId = targetScope.id;
 
   // Only updated_at present → nothing actually changed.
   if (Object.keys(set).length === 1) return memory;
-  await app.db.update(memories).set(set).where(eq(memories.id, id));
+  const updated = await app.db.transaction(async (tx) => {
+    const orgIds = [...new Set([scope.orgId, targetScope.orgId].filter((value): value is string => Boolean(value)))].sort();
+    for (const orgId of orgIds) {
+      await tx.execute(sql`SELECT id FROM organizations WHERE id = ${orgId} FOR SHARE`);
+    }
 
-  const updated = await fetchMemory(app, id);
-  await logAudit(app, {
-    action: 'memory.update',
-    actorUserId: ctx.userId,
-    apiKeyId: ctx.apiKeyId,
-    sourceApp: ctx.sourceApp,
-    memoryId: id,
-    scopeId: updated.scopeId,
-    orgId: targetScope.orgId,
-    details: { fields: Object.keys(input) },
+    // Serialize same-memory mutations and ensure a stale request cannot follow
+    // a concurrently moved row into a scope it was never authorized to touch.
+    const current = await tx.execute<{ scopeId: string }>(sql`
+      SELECT scope_id AS "scopeId"
+      FROM memories
+      WHERE id = ${id}
+        AND deleted_at IS NULL
+        AND (expires_at IS NULL OR expires_at > now())
+      FOR UPDATE`);
+    if (current.rows[0]?.scopeId !== memory.scopeId) throw notFound('Memory not found');
+
+    const sourceResult = await tx.execute<LockedScopeAccess>(
+      lockedScopeAccessQuery(ctx.userId, memory.scopeId),
+    );
+    const lockedSource = sourceResult.rows[0];
+    if (!lockedSource || lockedSource.orgId !== scope.orgId) throw notFound('Memory not found');
+    if (memory.createdBy !== ctx.userId && !lockedSource.canManage) {
+      throw forbidden('Only the memory creator or a scope manager can edit this memory');
+    }
+
+    if (targetScope.id !== memory.scopeId) {
+      const targetResult = await tx.execute<LockedScopeAccess>(
+        lockedScopeAccessQuery(ctx.userId, targetScope.id),
+      );
+      const lockedTarget = targetResult.rows[0];
+      if (!lockedTarget || lockedTarget.orgId !== targetScope.orgId) throw notFound('Target scope not found');
+    }
+
+    const [changed] = await tx
+      .update(memories)
+      .set(set)
+      .where(and(eq(memories.id, id), eq(memories.scopeId, memory.scopeId)))
+      .returning();
+    if (!changed) throw notFound('Memory not found');
+    // Capture the row before releasing the authorization and row locks. A
+    // second writer may move it immediately after commit, but cannot alter this
+    // request's response or expose the destination scope's later content.
+    return mapMutationMemory(changed, targetScope, memory.createdByName);
   });
+  const auditEvents: AuditEvent[] = [
+    {
+      action: 'memory.update',
+      actorUserId: ctx.userId,
+      apiKeyId: ctx.apiKeyId,
+      sourceApp: ctx.sourceApp,
+      memoryId: id,
+      scopeId: updated.scopeId,
+      orgId: targetScope.orgId,
+      details: { fields: Object.keys(input) },
+    },
+  ];
+  // A move out of an organization affects that organization's data even though
+  // the updated row now belongs elsewhere. Preserve a source-side audit event
+  // without exposing the private/cross-org destination.
+  if (scope.orgId && scope.orgId !== targetScope.orgId) {
+    auditEvents.push({
+      action: 'memory.update',
+      actorUserId: ctx.userId,
+      apiKeyId: ctx.apiKeyId,
+      sourceApp: ctx.sourceApp,
+      memoryId: id,
+      scopeId: memory.scopeId,
+      orgId: scope.orgId,
+      details: { fields: ['scopeId'], movedOut: true },
+    });
+  }
+  await logAuditMany(app, auditEvents);
   return updated;
 }
 
 export async function deleteMemory(app: AppContext, ctx: AuthContext, id: string): Promise<void> {
-  const { memory, scope } = await getMemoryWithAccess(app, ctx, id);
+  // Exact-id deletion also reaches expired rows retained for housekeeping: an
+  // explicit forget must erase the content immediately, even after expiry.
+  const { memory, scope } = await getMemoryWithAccess(app, ctx, id, 'retained');
   if (!canModify(ctx, memory, scope)) {
     throw forbidden('Only the memory creator or a scope manager can delete this memory');
   }
-  await app.db
-    .update(memories)
-    .set({ deletedAt: sql`now()`, updatedAt: sql`now()` })
-    .where(eq(memories.id, id));
+  await app.db.transaction(async (tx) => {
+    if (scope.orgId) {
+      await tx.execute(sql`SELECT id FROM organizations WHERE id = ${scope.orgId} FOR SHARE`);
+    }
+    const current = await tx.execute<{ scopeId: string }>(sql`
+      SELECT scope_id AS "scopeId" FROM memories WHERE id = ${id} FOR UPDATE`);
+    if (current.rows[0]?.scopeId !== memory.scopeId) throw notFound('Memory not found');
+
+    const access = await tx.execute<LockedScopeAccess>(lockedScopeAccessQuery(ctx.userId, memory.scopeId));
+    const lockedScope = access.rows[0];
+    if (!lockedScope || lockedScope.orgId !== scope.orgId) throw notFound('Memory not found');
+    if (memory.createdBy !== ctx.userId && !lockedScope.canManage) {
+      throw forbidden('Only the memory creator or a scope manager can delete this memory');
+    }
+
+    const deleted = await tx
+      .delete(memories)
+      .where(and(eq(memories.id, id), eq(memories.scopeId, memory.scopeId)))
+      .returning({ id: memories.id });
+    if (!deleted.length) throw notFound('Memory not found');
+  });
   await logAudit(app, {
     action: 'memory.delete',
     actorUserId: ctx.userId,
@@ -433,7 +631,6 @@ export async function deleteMemory(app: AppContext, ctx: AuthContext, id: string
     memoryId: id,
     scopeId: memory.scopeId,
     orgId: scope.orgId,
-    details: { contentPreview: memory.content.slice(0, 80) },
   });
 }
 
