@@ -1,7 +1,7 @@
-import { Link, Navigate } from 'react-router-dom';
-import { useAuth } from '../auth';
-import { LogoMark } from '../components/icons';
-import { LoginForm } from '../components/login-form';
+import { Link, Navigate } from 'react-router-dom'
+import { useAuth } from '../auth'
+import { LogoMark } from '../components/icons'
+import { LoginForm } from '../components/login-form'
 
 /** Shared two-column auth shell (shadcn login-02 block layout). */
 export function AuthLayout({ children }: { children: React.ReactNode }) {
@@ -20,23 +20,24 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
       </div>
       <div className="relative hidden bg-muted lg:block">
         <img
-          src="https://cdn.midjourney.com/db4808c4-4514-4e8f-a807-ccdb36a9dfad/0_3.png"
+          // src="https://cdn.midjourney.com/56be6a5a-97a1-4d08-af25-347a8bd4e7f6/0_1.png"
+          src="https://cdn.midjourney.com/f030bf52-824b-4326-9b00-3cd8a057a467/0_1.png"
           alt=""
           className="absolute inset-0 size-full object-cover"
         />
       </div>
     </div>
-  );
+  )
 }
 
 export default function LoginPage() {
-  const { user, loading } = useAuth();
+  const { user, loading } = useAuth()
 
-  if (!loading && user) return <Navigate to="/" replace />;
+  if (!loading && user) return <Navigate to="/" replace />
 
   return (
     <AuthLayout>
       <LoginForm />
     </AuthLayout>
-  );
+  )
 }

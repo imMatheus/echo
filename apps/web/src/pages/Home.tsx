@@ -18,6 +18,7 @@ import { SourceChip } from '../components/Badge'
 import { ChartEmpty } from '../components/ChartEmpty'
 import { PageHeader } from '../components/PageHeader'
 import { PageLoading } from '../components/PageLoading'
+import { PreviewCard } from '../components/PreviewCard'
 import { RelativeTime } from '../components/RelativeTime'
 import { RequestErrorState } from '../components/RequestErrorState'
 import {
@@ -86,16 +87,17 @@ function StatTile({
   value: number
   hint: string
 }) {
+  // Stat tiles are read-only, so no `interactive` — the card stays inert.
   return (
-    <Card size="sm">
-      <CardContent>
-        <div className="text-xs text-muted-foreground">{label}</div>
-        <div className="mt-1 text-2xl font-semibold tracking-tight">
+    <PreviewCard
+      title={label}
+      description={hint}
+      preview={
+        <span className="text-3xl font-semibold tracking-tight text-grayscale-12 tabular-nums">
           {compact.format(value)}
-        </div>
-        <div className="mt-0.5 text-[11px] text-muted-foreground">{hint}</div>
-      </CardContent>
-    </Card>
+        </span>
+      }
+    />
   )
 }
 
@@ -104,14 +106,27 @@ function MemoriesChart({ stats }: { stats: UsageStats }) {
     const byBucket = new Map(
       stats.memoriesOverTime.map((r) => [r.bucket, r.count]),
     )
-    return stats.buckets.map((bucket) => ({
-      bucket,
-      count: byBucket.get(bucket) ?? 0,
-    }))
+    // The final bucket is the current, still-accumulating period. Split it into
+    // its own dashed series so the line reads as "not done yet" — `count` draws
+    // the solid history, `countProjected` overlaps the last segment dashed.
+    const lastIndex = stats.buckets.length - 1
+    return stats.buckets.map((bucket, i) => {
+      const value = byBucket.get(bucket) ?? 0
+      return {
+        bucket,
+        count: i < lastIndex ? value : null,
+        countProjected: i >= lastIndex - 1 ? value : null,
+        // Full-range invisible series so the tooltip shows one clean value at
+        // every bucket, including the in-progress one where `count` is null.
+        countValue: value,
+      }
+    })
   }, [stats])
 
   const config = {
     count: { label: 'Memories', color: CHART_COLORS[0] },
+    countProjected: { label: 'Memories', color: CHART_COLORS[0] },
+    countValue: { label: 'Memories', color: CHART_COLORS[0] },
   } satisfies ChartConfig
 
   return (
@@ -157,6 +172,17 @@ function MemoriesChart({ stats }: { stats: UsageStats }) {
               }
             />
             <Area
+              dataKey="countValue"
+              type="monotone"
+              // Invisible line (zero width, no fill), but a real stroke color so
+              // the tooltip renders its purple indicator swatch.
+              stroke="var(--color-countValue)"
+              strokeWidth={0}
+              fill="none"
+              activeDot={false}
+              isAnimationActive={false}
+            />
+            <Area
               dataKey="count"
               type="monotone"
               stroke="var(--color-count)"
@@ -164,6 +190,19 @@ function MemoriesChart({ stats }: { stats: UsageStats }) {
               fill="var(--color-count)"
               fillOpacity={0.1}
               isAnimationActive={false}
+              tooltipType="none"
+            />
+            <Area
+              dataKey="countProjected"
+              type="monotone"
+              stroke="var(--color-count)"
+              strokeWidth={2}
+              strokeDasharray="4 4"
+              fill="var(--color-count)"
+              fillOpacity={0.1}
+              connectNulls
+              isAnimationActive={false}
+              tooltipType="none"
             />
           </AreaChart>
         </ChartContainer>
@@ -293,9 +332,6 @@ function SourceAppsChart({ stats }: { stats: UsageStats }) {
     <Card size="sm" className="gap-0">
       <CardHeader className="border-b pb-3">
         <CardTitle>Activity by source app</CardTitle>
-        <CardDescription>
-          Where recorded activity in Echo comes from.
-        </CardDescription>
         {hasData && (
           // Column headers line up with the row number cells below: same w-16
           // widths, and header + content share the card's horizontal padding.
@@ -462,7 +498,8 @@ export default function HomePage() {
           isValidating && 'opacity-60',
         )}
       >
-        <div className="grid gap-4 sm:grid-cols-3">
+        {/* dqnamo-style tray: tinted bordered shell with concentric inner cards. */}
+        <div className="grid gap-1.5 rounded-[16px] border border-grayscale-3 bg-grayscale-2 p-1.5 sm:grid-cols-3">
           <StatTile
             label="Total memories"
             value={stats.totalMemories}
@@ -481,7 +518,7 @@ export default function HomePage() {
         </div>
         <MemoriesChart stats={stats} />
         <ActivityChart stats={stats} />
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid gap-1.5 rounded-[16px] border border-grayscale-3 bg-grayscale-2 p-1.5 lg:grid-cols-2">
           <SourceAppsChart stats={stats} />
           <RecentActivity />
         </div>

@@ -48,21 +48,26 @@ export function MemoryCard({ memory, scorePill }: { memory: Memory; scorePill?: 
       // Carry the current page as `background` so the detail opens as a modal
       // over this list; a direct visit to the URL renders the full page.
       state={{ background: location }}
-      className="flex h-full min-w-0 flex-col gap-2.5 rounded-xl border bg-card p-4 transition-all hover:border-ring/40 hover:bg-input/10 hover:shadow-sm"
+      // Shares the dqnamo card anatomy with PreviewCard: a p-1 shell around an
+      // inset well (the memory's badges + content), with the tags/source footer
+      // tucked below. Shell and well each shift one grayscale step on hover.
+      className="group flex h-full min-w-0 flex-col overflow-hidden rounded-[13px] border border-grayscale-3 bg-grayscale-1 p-1 shadow-card transition-colors hover:border-grayscale-4 hover:bg-grayscale-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring dark:border-grayscale-4 dark:bg-grayscale-3 dark:shadow-none dark:hover:border-grayscale-6 dark:hover:bg-grayscale-4"
     >
-      <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-        {scorePill}
-        <ScopeBadge type={memory.scopeType} name={memory.scopeName} />
-        <KindBadge kind={memory.kind} />
-        <SensitivityBadge sensitivity={memory.sensitivity} />
-        <span className="ms-auto whitespace-nowrap ps-1">
-          <RelativeTime date={memory.createdAt} />
-        </span>
+      <div className="flex flex-1 flex-col gap-2 rounded-lg bg-grayscale-2 p-3 transition-colors group-hover:bg-grayscale-3 dark:bg-grayscale-2 dark:group-hover:bg-grayscale-3">
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+          {scorePill}
+          <ScopeBadge type={memory.scopeType} name={memory.scopeName} />
+          <KindBadge kind={memory.kind} />
+          <SensitivityBadge sensitivity={memory.sensitivity} />
+          <span className="ms-auto whitespace-nowrap ps-1">
+            <RelativeTime date={memory.createdAt} />
+          </span>
+        </div>
+        <p className="line-clamp-4 whitespace-pre-wrap text-sm leading-relaxed [overflow-wrap:anywhere]">
+          {memory.content}
+        </p>
       </div>
-      <p className="line-clamp-4 whitespace-pre-wrap text-sm leading-relaxed [overflow-wrap:anywhere]">
-        {memory.content}
-      </p>
-      <div className="mt-auto flex min-w-0 flex-wrap items-center gap-1.5 pt-0.5">
+      <div className="mt-auto flex min-w-0 flex-wrap items-center gap-1.5 px-2 pt-2.5 pb-1.5">
         {memory.tags.map((t) => (
           <Tag key={t} tag={t} />
         ))}

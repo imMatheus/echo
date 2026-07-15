@@ -1,7 +1,6 @@
 import {
   Building2Icon,
   HomeIcon,
-  KeyRoundIcon,
   LayersIcon,
   LogOutIcon,
   MonitorIcon,
@@ -44,7 +43,6 @@ function initials(name: string): string {
 const NAV_ITEMS = [
   { to: '/', label: 'Home', icon: <HomeIcon />, end: true },
   { to: '/memories', label: 'Memories', icon: <LayersIcon />, end: false },
-  { to: '/keys', label: 'API Keys', icon: <KeyRoundIcon />, end: false },
   { to: '/audit', label: 'Audit Log', icon: <ScrollTextIcon />, end: false },
   { to: '/orgs', label: 'Organizations', icon: <Building2Icon />, end: false },
   { to: '/connect', label: 'Connect', icon: <ZapIcon />, end: false },

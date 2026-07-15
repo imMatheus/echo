@@ -1,34 +1,40 @@
-import { useState } from 'react';
-import type { FormEvent } from 'react';
-import { Building2Icon, PlusIcon } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useSWRConfig } from 'swr';
-import { toast } from 'sonner';
-import { slugify } from '@echo/shared';
-import * as api from '@/api';
-import { errorMessage } from '@/api';
-import { keys, useOrgs } from '@/hooks';
-import { RoleBadge } from '@/components/Badge';
-import { EmptyState } from '@/components/EmptyState';
-import { PageHeader } from '@/components/PageHeader';
-import { PageLoading } from '@/components/PageLoading';
-import { RequestErrorState } from '@/components/RequestErrorState';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
+import { useState } from 'react'
+import type { FormEvent } from 'react'
+import { Building2Icon, PlusIcon } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { useSWRConfig } from 'swr'
+import { toast } from 'sonner'
+import { slugify } from '@echo/shared'
+import * as api from '@/api'
+import { errorMessage } from '@/api'
+import { keys, useOrgs } from '@/hooks'
+import { RoleBadge } from '@/components/Badge'
+import { EmptyState } from '@/components/EmptyState'
+import { PageHeader } from '@/components/PageHeader'
+import { PageLoading } from '@/components/PageLoading'
+import { PreviewCard } from '@/components/PreviewCard'
+import { RequestErrorState } from '@/components/RequestErrorState'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
 import {
   Dialog,
   DialogContent,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field';
-import { Input } from '@/components/ui/input';
-import { Spinner } from '@/components/ui/spinner';
+} from '@/components/ui/dialog'
+import {
+  Field,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+} from '@/components/ui/field'
+import { Input } from '@/components/ui/input'
+import { Spinner } from '@/components/ui/spinner'
 
 export default function OrgsPage() {
-  const { data: orgs, error, mutate } = useOrgs();
-  const [showCreate, setShowCreate] = useState(false);
+  const { data: orgs, error, mutate } = useOrgs()
+  const [showCreate, setShowCreate] = useState(false)
 
   return (
     <div>
@@ -60,68 +66,66 @@ export default function OrgsPage() {
           }
         />
       ) : (
-        <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-[repeat(auto-fill,minmax(240px,1fr))]">
+        // Concentric tray of org cards, matching the home dashboard trays.
+        <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-[repeat(auto-fill,minmax(245px,1fr))]">
           {orgs.map((org) => (
-            <Link
+            <PreviewCard
               key={org.id}
               to={`/orgs/${org.id}`}
-              className="block rounded-xl border bg-card p-4 transition-colors hover:border-ring/40 hover:bg-input/10"
-            >
-              <h3 className="mb-2 font-heading text-sm font-semibold tracking-tight [overflow-wrap:anywhere]">
-                {org.name}
-              </h3>
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <RoleBadge role={org.role} />
-                <span>
-                  {org.memberCount} member{org.memberCount === 1 ? '' : 's'}
+              badge={<RoleBadge role={org.role} />}
+              preview={
+                <span className="font-heading text-3xl font-semibold text-grayscale-11">
+                  {org.name.trim().charAt(0).toUpperCase() || '#'}
                 </span>
-              </div>
-            </Link>
+              }
+              title={org.name}
+              description={`${org.memberCount} member${org.memberCount === 1 ? '' : 's'}`}
+            />
           ))}
         </div>
       )}
 
       {showCreate && <CreateOrgModal onClose={() => setShowCreate(false)} />}
     </div>
-  );
+  )
 }
 
 function CreateOrgModal({ onClose }: { onClose: () => void }) {
-  const navigate = useNavigate();
-  const { mutate } = useSWRConfig();
-  const [name, setName] = useState('');
-  const [slug, setSlug] = useState('');
-  const [slugTouched, setSlugTouched] = useState(false);
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate()
+  const { mutate } = useSWRConfig()
+  const [name, setName] = useState('')
+  const [slug, setSlug] = useState('')
+  const [slugTouched, setSlugTouched] = useState(false)
+  const [pending, setPending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const onNameChange = (value: string) => {
-    setName(value);
+    setName(value)
     // slugify falls back to "org" on empty input; keep the preview blank instead.
-    if (!slugTouched) setSlug(value.trim() ? slugify(value) : '');
-  };
+    if (!slugTouched) setSlug(value.trim() ? slugify(value) : '')
+  }
 
   const submit = async (e: FormEvent) => {
-    e.preventDefault();
-    setError(null);
+    e.preventDefault()
+    setError(null)
     if (!name.trim()) {
-      setError('Name is required');
-      return;
+      setError('Name is required')
+      return
     }
-    setPending(true);
+    setPending(true)
     try {
       const res = await api.createOrg({
         name: name.trim(),
         slug: slug.trim() || undefined,
-      });
-      void mutate(keys.orgs);
-      toast.success(`Created ${res.org.name}`);
-      navigate(`/orgs/${res.org.id}`);
+      })
+      void mutate(keys.orgs)
+      toast.success(`Created ${res.org.name}`)
+      navigate(`/orgs/${res.org.id}`)
     } catch (err) {
-      setError(errorMessage(err));
-      setPending(false);
+      setError(errorMessage(err))
+      setPending(false)
     }
-  };
+  }
 
   return (
     <Dialog
@@ -159,18 +163,27 @@ function CreateOrgModal({ onClose }: { onClose: () => void }) {
                 className="font-mono"
                 value={slug}
                 onChange={(e) => {
-                  setSlugTouched(true);
-                  setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]+/g, '-'));
+                  setSlugTouched(true)
+                  setSlug(
+                    e.target.value.toLowerCase().replace(/[^a-z0-9-]+/g, '-'),
+                  )
                 }}
                 placeholder="acme-inc"
                 minLength={2}
                 maxLength={48}
               />
-              <FieldDescription>A short URL-friendly identifier.</FieldDescription>
+              <FieldDescription>
+                A short URL-friendly identifier.
+              </FieldDescription>
             </Field>
           </FieldGroup>
           <DialogFooter className="mt-4">
-            <Button variant="outline" type="button" onClick={onClose} disabled={pending}>
+            <Button
+              variant="outline"
+              type="button"
+              onClick={onClose}
+              disabled={pending}
+            >
               Cancel
             </Button>
             <Button type="submit" disabled={pending}>
@@ -181,5 +194,5 @@ function CreateOrgModal({ onClose }: { onClose: () => void }) {
         </form>
       </DialogContent>
     </Dialog>
-  );
+  )
 }

@@ -12,7 +12,6 @@ import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { Toaster } from '@/components/ui/sonner';
 
-const ApiKeysPage = lazy(() => import('./pages/ApiKeys'));
 const AuditPage = lazy(() => import('./pages/Audit'));
 const ConnectPage = lazy(() => import('./pages/Connect'));
 const HomePage = lazy(() => import('./pages/Home'));
@@ -48,7 +47,7 @@ function AuthErrorScreen({ error, retry }: { error: unknown; retry: () => Promis
 
   return (
     <main className="flex min-h-screen items-center justify-center px-5">
-      <div className="max-w-sm rounded-xl border bg-card p-5 text-center">
+      <div className="max-w-sm rounded-xl border bg-card p-5 text-center shadow-card">
         <h1 className="font-heading text-lg font-semibold">Echo is unavailable</h1>
         <p className="mt-2 text-sm text-muted-foreground">{errorMessage(error)}</p>
         <Button className="mt-4" onClick={() => void onRetry()} disabled={retrying}>
@@ -74,7 +73,7 @@ class PageErrorBoundary extends Component<
     if (!this.state.hasError) return this.props.children;
     return (
       <div role="alert" className="flex min-h-64 items-center justify-center px-5">
-        <div className="max-w-sm rounded-xl border bg-card p-5 text-center">
+        <div className="max-w-sm rounded-xl border bg-card p-5 text-center shadow-card">
           <h1 className="font-heading text-lg font-semibold">This page could not be loaded</h1>
           <p className="mt-2 text-sm text-muted-foreground">
             The dashboard may have been updated since this tab was opened. Reload to get the current page files.
@@ -127,7 +126,7 @@ function AppRoutes() {
           <Route path="/" element={<Page><HomePage /></Page>} />
           <Route path="/memories" element={<Page><MemoriesPage /></Page>} />
           <Route path="/memories/:id" element={<Page><MemoryDetailPage /></Page>} />
-          <Route path="/keys" element={<Page><ApiKeysPage /></Page>} />
+          <Route path="/keys" element={<Navigate to="/connect" replace />} />
           <Route path="/audit" element={<Page><AuditPage /></Page>} />
           <Route path="/orgs" element={<Page><OrgsPage /></Page>} />
           <Route path="/orgs/:id" element={<Page><OrgDetailPage /></Page>} />

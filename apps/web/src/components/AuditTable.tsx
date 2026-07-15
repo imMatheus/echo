@@ -157,7 +157,7 @@ export function AuditTable({
         />
       ) : (
         <>
-          <div className={cn('divide-y overflow-hidden rounded-xl border bg-card', loading && 'opacity-55')}>
+          <div className={cn('divide-y overflow-hidden rounded-xl border bg-card shadow-card', loading && 'opacity-55')}>
             {groups.map((group) => (
               <section key={group.label}>
                 <header className="flex items-baseline gap-2 border-b bg-muted/40 px-4 py-1.5">

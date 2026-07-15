@@ -16,6 +16,10 @@
 @theme {
   --font-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas,
     'Liberation Mono', monospace;
+  /* Barely-there card drop shadow; pairs with the hairline sand border. */
+  --shadow-card:
+    2px 2px 4px rgb(0 0 0 / 0.02),
+    0 1px 2px rgb(0 0 0 / 0.03);
 }
 
 @layer base {
@@ -93,27 +97,57 @@
   --color-scope-team: var(--scope-team);
   --color-scope-project: var(--scope-project);
   --color-scope-workspace: var(--scope-workspace);
+
+  /* Full warm-gray (Radix sand) scale for layered card surfaces where the
+     semantic tokens are too coarse — trays, preview wells, hover steps. */
+  --color-grayscale-1: var(--grayscale-1);
+  --color-grayscale-2: var(--grayscale-2);
+  --color-grayscale-3: var(--grayscale-3);
+  --color-grayscale-4: var(--grayscale-4);
+  --color-grayscale-5: var(--grayscale-5);
+  --color-grayscale-6: var(--grayscale-6);
+  --color-grayscale-7: var(--grayscale-7);
+  --color-grayscale-8: var(--grayscale-8);
+  --color-grayscale-9: var(--grayscale-9);
+  --color-grayscale-10: var(--grayscale-10);
+  --color-grayscale-11: var(--grayscale-11);
+  --color-grayscale-12: var(--grayscale-12);
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  /* Warm neutral (Radix "sand") scale. Cards share the page surface and are
+     separated by hairline sand borders plus shadow-card, not by fill. */
+  --background: #fdfdfc;
+  --foreground: #21201c;
+  --card: #fdfdfc;
+  --card-foreground: #21201c;
+  --popover: #fdfdfc;
+  --popover-foreground: #21201c;
+  --primary: #21201c;
+  --primary-foreground: #f9f9f8;
+  --secondary: #f1f0ef;
+  --secondary-foreground: #21201c;
+  --muted: #f1f0ef;
+  --muted-foreground: #63635e;
+  --accent: #f1f0ef;
+  --accent-foreground: #21201c;
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --border: #f1f0ef;
+  --input: #dad9d6;
+  --ring: #8d8d86;
+  /* Radix sand 1–12 */
+  --grayscale-1: #fdfdfc;
+  --grayscale-2: #f9f9f8;
+  --grayscale-3: #f1f0ef;
+  --grayscale-4: #e9e8e6;
+  --grayscale-5: #e2e1de;
+  --grayscale-6: #dad9d6;
+  --grayscale-7: #cfceca;
+  --grayscale-8: #bcbbb5;
+  --grayscale-9: #8d8d86;
+  --grayscale-10: #82827c;
+  --grayscale-11: #63635e;
+  --grayscale-12: #21201c;
   /* Categorical chart palette — vivid brand hues, ordered for CVD separation
      (validated on light + dark surfaces). Theme-independent, so defined only
      here; each pairs with a -foreground ink legible on a solid fill of it
@@ -132,14 +166,14 @@
   --chart-5-foreground: #ffffff;
   --chart-other-foreground: #ffffff;
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar: #f9f9f8;
+  --sidebar-foreground: #21201c;
+  --sidebar-primary: #21201c;
+  --sidebar-primary-foreground: #f9f9f8;
+  --sidebar-accent: #f1f0ef;
+  --sidebar-accent-foreground: #21201c;
+  --sidebar-border: #f1f0ef;
+  --sidebar-ring: #8d8d86;
 
   /* Echo data colors (tuned for the dark UI) */
   --success: #46c08a;
@@ -152,32 +186,47 @@
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  /* Radix "sand" dark scale — warm near-blacks mirroring the light theme. */
+  --background: #111110;
+  --foreground: #eeeeec;
+  /* Cards sit one scale step above the page (sand dark 3 on 1), dqnamo style. */
+  --card: #222221;
+  --card-foreground: #eeeeec;
+  --popover: #222221;
+  --popover-foreground: #eeeeec;
+  --primary: #eeeeec;
+  --primary-foreground: #191918;
+  --secondary: #2a2a28;
+  --secondary-foreground: #eeeeec;
+  --muted: #2a2a28;
+  --muted-foreground: #b5b3ad;
+  --accent: #2a2a28;
+  --accent-foreground: #eeeeec;
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --border: #2a2a28;
+  --input: #3b3a37;
+  --ring: #6f6d66;
+  /* Radix sand dark 1–12 */
+  --grayscale-1: #111110;
+  --grayscale-2: #191918;
+  --grayscale-3: #222221;
+  --grayscale-4: #2a2a28;
+  --grayscale-5: #31312e;
+  --grayscale-6: #3b3a37;
+  --grayscale-7: #494844;
+  --grayscale-8: #62605b;
+  --grayscale-9: #6f6d66;
+  --grayscale-10: #7c7b74;
+  --grayscale-11: #b5b3ad;
+  --grayscale-12: #eeeeec;
   /* Chart palette is theme-independent — see :root. Override here only if a
      hue ever needs a dark-surface-specific value. */
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --sidebar: #191918;
+  --sidebar-foreground: #eeeeec;
+  --sidebar-primary: #eeeeec;
+  --sidebar-primary-foreground: #191918;
+  --sidebar-accent: #2a2a28;
+  --sidebar-accent-foreground: #eeeeec;
+  --sidebar-border: #222221;
+  --sidebar-ring: #6f6d66;
 }

@@ -291,7 +291,7 @@ function MembersTab({
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-xl border bg-card">
+      <div className="overflow-x-auto rounded-xl border bg-card shadow-card dark:shadow-none">
         <Table>
           <TableHeader>
             <TableRow>
