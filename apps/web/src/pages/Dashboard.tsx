@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react'
-import { ScrollTextIcon } from 'lucide-react'
+import { ScrollTextIcon, ZapIcon } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
 import {
   Area,
@@ -16,6 +16,7 @@ import type { AuditQuery } from '../api'
 import * as api from '../api'
 import { SourceChip } from '../components/Badge'
 import { ChartEmpty } from '../components/ChartEmpty'
+import { EmptyState } from '../components/EmptyState'
 import { PageHeader } from '../components/PageHeader'
 import { PreviewCard } from '../components/PreviewCard'
 import { RelativeTime } from '../components/RelativeTime'
@@ -38,6 +39,7 @@ import {
   type ChartConfig,
 } from '@/components/ui/chart'
 import { Skeleton } from '@/components/ui/skeleton'
+import { buttonVariants } from '@/components/ui/button'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAudit, useStats } from '@/hooks'
 import {
@@ -498,6 +500,25 @@ export default function DashboardPage() {
         <RequestErrorState error={error} onRetry={() => mutate()} />
       ) : !stats ? (
         <DashboardSkeleton />
+      ) : stats.totalMemories === 0 ? (
+        <EmptyState
+          icon={<ZapIcon />}
+          title="Start building shared context"
+          description="Connect an AI app so it can remember and recall context through Echo, or add your first memory manually."
+          action={
+            <div className="flex flex-wrap justify-center gap-2">
+              <Link to="/connect" className={cn(buttonVariants())}>
+                Connect an app
+              </Link>
+              <Link
+                to="/memories"
+                className={cn(buttonVariants({ variant: 'outline' }))}
+              >
+                Add a memory
+              </Link>
+            </div>
+          }
+        />
       ) : (
         <div
           className={cn(

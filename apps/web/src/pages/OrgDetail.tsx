@@ -78,8 +78,8 @@ const isScopeMembersCacheKey = (key: unknown): boolean =>
   Array.isArray(key) && key[0] === 'scope:members';
 
 const ROLE_ITEMS = [
-  { value: 'member', label: 'member' },
-  { value: 'owner', label: 'owner' },
+  { value: 'member', label: 'Member' },
+  { value: 'owner', label: 'Owner' },
 ];
 
 export default function OrgDetailPage() {
@@ -523,6 +523,9 @@ function AddMemberModal({
                   ))}
                 </SelectContent>
               </Select>
+              <FieldDescription>
+                Members can use shared memories. Owners can also manage members, scopes, audit, and settings.
+              </FieldDescription>
             </Field>
           </FieldGroup>
           <DialogFooter className="mt-4">

@@ -20,7 +20,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Field, FieldGroup, FieldLabel } from '@/components/ui/field';
+import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -32,8 +32,22 @@ import {
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
 
-const KIND_ITEMS = MEMORY_KINDS.map((k) => ({ value: k, label: k }));
-const SENSITIVITY_ITEMS = SENSITIVITIES.map((s) => ({ value: s, label: s }));
+const KIND_LABELS: Record<MemoryKind, string> = {
+  explicit: 'User-provided',
+  inferred: 'AI-inferred',
+};
+
+const SENSITIVITY_LABELS: Record<Sensitivity, string> = {
+  low: 'Low sensitivity',
+  normal: 'Normal sensitivity',
+  high: 'High sensitivity',
+};
+
+const KIND_ITEMS = MEMORY_KINDS.map((kind) => ({ value: kind, label: KIND_LABELS[kind] }));
+const SENSITIVITY_ITEMS = SENSITIVITIES.map((sensitivity) => ({
+  value: sensitivity,
+  label: SENSITIVITY_LABELS[sensitivity],
+}));
 
 export function MemoryFormModal({
   scopes,
@@ -175,11 +189,14 @@ export function MemoryFormModal({
                   <ScopeSelectItems scopes={writable} />
                 </SelectContent>
               </Select>
+              <FieldDescription>
+                Scope controls which people can access this memory through Echo.
+              </FieldDescription>
             </Field>
 
             <div className="grid grid-cols-2 gap-3 max-sm:grid-cols-1">
               <Field>
-                <FieldLabel htmlFor="mem-kind">Kind</FieldLabel>
+                <FieldLabel htmlFor="mem-kind">How it was learned</FieldLabel>
                 <Select items={KIND_ITEMS} value={kind} onValueChange={(v) => setKind(v as MemoryKind)}>
                   <SelectTrigger id="mem-kind" className="w-full">
                     <SelectValue />
@@ -192,6 +209,9 @@ export function MemoryFormModal({
                     ))}
                   </SelectContent>
                 </Select>
+                <FieldDescription>
+                  Use AI-inferred only when a model derived this rather than the user stating it.
+                </FieldDescription>
               </Field>
               <Field>
                 <FieldLabel htmlFor="mem-sensitivity">Sensitivity</FieldLabel>
@@ -211,6 +231,9 @@ export function MemoryFormModal({
                     ))}
                   </SelectContent>
                 </Select>
+                <FieldDescription>
+                  Classification only—it does not restrict access. Scope controls access.
+                </FieldDescription>
               </Field>
             </div>
 
@@ -227,6 +250,7 @@ export function MemoryFormModal({
                   onChange={(e) => setConfidence(e.target.value)}
                   required
                 />
+                <FieldDescription>1 means certain; use a lower value when the memory may be wrong.</FieldDescription>
               </Field>
               <Field>
                 <FieldLabel htmlFor="mem-expires">Expires (optional)</FieldLabel>
@@ -236,6 +260,7 @@ export function MemoryFormModal({
                   value={expiresAt}
                   onChange={(e) => setExpiresAt(e.target.value)}
                 />
+                <FieldDescription>The memory stops appearing after this time.</FieldDescription>
               </Field>
             </div>
 
@@ -248,6 +273,7 @@ export function MemoryFormModal({
                 placeholder="comma, separated, tags"
                 maxLength={1_300}
               />
+              <FieldDescription>Comma-separated labels used to organize and filter memories.</FieldDescription>
             </Field>
           </FieldGroup>
 
