@@ -79,7 +79,6 @@ const isScopeMembersCacheKey = (key: unknown): boolean =>
 
 const ROLE_ITEMS = [
   { value: 'member', label: 'member' },
-  { value: 'admin', label: 'admin' },
   { value: 'owner', label: 'owner' },
 ];
 
@@ -170,10 +169,9 @@ export default function OrgDetailPage() {
   }
 
   // Scope access refreshes are the privacy boundary and can arrive before the
-  // org-role request. Never keep rendering cached admin controls/audit data if
+  // org-role request. Never keep rendering cached owner controls/audit data if
   // the current scope snapshot already says management was revoked.
-  const isAdmin =
-    (role === 'owner' || role === 'admin') && (scopes?.some((scope) => scope.canManage) ?? true);
+  const isOwner = role === 'owner' && (scopes?.some((scope) => scope.canManage) ?? true);
 
   return (
     <div>
@@ -197,27 +195,27 @@ export default function OrgDetailPage() {
           />
         ))}
 
-      {tab === 'members' && <MembersTab orgId={orgId} myRole={role} canManage={isAdmin} />}
+      {tab === 'members' && <MembersTab orgId={orgId} canManage={isOwner} />}
 
       {tab === 'scopes' && (
         <ScopesTab
           orgId={orgId}
           scopes={scopes ?? []}
-          isAdmin={isAdmin}
+          isOwner={isOwner}
           onChanged={() => void mutateScopes()}
         />
       )}
 
       {tab === 'audit' &&
-        (isAdmin ? (
+        (isOwner ? (
           <OrgAudit orgId={orgId} />
         ) : (
           <Alert>
-            <AlertTitle>Only organization admins and owners can view the audit log.</AlertTitle>
+            <AlertTitle>Only organization owners can view the audit log.</AlertTitle>
           </Alert>
         ))}
 
-      {tab === 'settings' && <SettingsTab org={org} isAdmin={isAdmin} />}
+      {tab === 'settings' && <SettingsTab org={org} isOwner={isOwner} />}
     </div>
   );
 }
@@ -253,15 +251,7 @@ function OrgTabSkeleton({ tab }: { tab: Tab }) {
 // Members
 // ---------------------------------------------------------------------------
 
-function MembersTab({
-  orgId,
-  myRole,
-  canManage,
-}: {
-  orgId: string;
-  myRole: OrgRole;
-  canManage: boolean;
-}) {
+function MembersTab({ orgId, canManage }: { orgId: string; canManage: boolean }) {
   const { data: members, error, mutate: mutateMembers } = useOrgMembers(orgId);
   const { mutate } = useSWRConfig();
   const { user } = useAuth();
@@ -269,8 +259,6 @@ function MembersTab({
   const [showAdd, setShowAdd] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<OrgMember | null>(null);
   const [changingRoleId, setChangingRoleId] = useState<string | null>(null);
-
-  const isAdmin = canManage;
 
   const changeRole = async (member: OrgMember, newRole: OrgRole) => {
     if (newRole === member.role) return;
@@ -326,7 +314,7 @@ function MembersTab({
   if (!members) {
     return (
       <div>
-        {isAdmin && (
+        {canManage && (
           <div className="mb-3.5 flex justify-end">
             <Button disabled>
               <PlusIcon data-icon="inline-start" />
@@ -341,7 +329,7 @@ function MembersTab({
 
   return (
     <div>
-      {isAdmin && (
+      {canManage && (
         <div className="mb-3.5 flex justify-end">
           <Button onClick={() => setShowAdd(true)}>
             <PlusIcon data-icon="inline-start" />
@@ -364,19 +352,14 @@ function MembersTab({
           <TableBody>
             {members.map((member) => {
               const isSelf = member.userId === user?.id;
-              const canAdminister = isAdmin && (myRole === 'owner' || member.role !== 'owner');
-              // only owners can grant/revoke owner
-              const roleItems = ROLE_ITEMS.filter(
-                (item) => item.value !== 'owner' || myRole === 'owner' || member.role === 'owner',
-              );
               return (
                 <TableRow key={member.userId}>
                   <TableCell className="font-semibold">{member.name}</TableCell>
                   <TableCell className="text-muted-foreground">{member.email}</TableCell>
                   <TableCell>
-                    {canAdminister ? (
+                    {canManage ? (
                       <Select
-                        items={roleItems}
+                        items={ROLE_ITEMS}
                         value={member.role}
                         onValueChange={(v) => void changeRole(member, v as OrgRole)}
                         disabled={changingRoleId !== null}
@@ -385,7 +368,7 @@ function MembersTab({
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {roleItems.map((item) => (
+                          {ROLE_ITEMS.map((item) => (
                             <SelectItem key={item.value} value={item.value}>
                               {item.label}
                             </SelectItem>
@@ -400,7 +383,7 @@ function MembersTab({
                     <RelativeTime date={member.joinedAt} />
                   </TableCell>
                   <TableCell className="text-right">
-                    {(isSelf || canAdminister) && (
+                    {(isSelf || canManage) && (
                       <Button
                         variant="destructive"
                         size="sm"
@@ -418,9 +401,8 @@ function MembersTab({
         </Table>
       </div>
 
-      {isAdmin && showAdd && (
+      {canManage && showAdd && (
         <AddMemberModal
-          myRole={myRole}
           onClose={() => setShowAdd(false)}
           onAdd={async (email, memberRole) => {
             await api.addOrgMember(orgId, { email, role: memberRole });
@@ -436,7 +418,7 @@ function MembersTab({
         />
       )}
 
-      {removeTarget && (removeTarget.userId === user?.id || isAdmin) && (
+      {removeTarget && (removeTarget.userId === user?.id || canManage) && (
         <ConfirmDialog
           title={removeTarget.userId === user?.id ? 'Leave organization?' : 'Remove member?'}
           message={
@@ -461,11 +443,9 @@ function MembersTab({
 }
 
 function AddMemberModal({
-  myRole,
   onClose,
   onAdd,
 }: {
-  myRole: OrgRole;
   onClose: () => void;
   onAdd: (email: string, role: OrgRole) => Promise<void>;
 }) {
@@ -473,8 +453,6 @@ function AddMemberModal({
   const [role, setRole] = useState<OrgRole>('member');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const roleItems = ROLE_ITEMS.filter((item) => item.value !== 'owner' || myRole === 'owner');
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -533,12 +511,12 @@ function AddMemberModal({
             </Field>
             <Field>
               <FieldLabel htmlFor="member-role">Role</FieldLabel>
-              <Select items={roleItems} value={role} onValueChange={(v) => setRole(v as OrgRole)}>
+              <Select items={ROLE_ITEMS} value={role} onValueChange={(v) => setRole(v as OrgRole)}>
                 <SelectTrigger id="member-role" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {roleItems.map((item) => (
+                  {ROLE_ITEMS.map((item) => (
                     <SelectItem key={item.value} value={item.value}>
                       {item.label}
                     </SelectItem>
@@ -569,12 +547,12 @@ function AddMemberModal({
 function ScopesTab({
   orgId,
   scopes,
-  isAdmin,
+  isOwner,
   onChanged,
 }: {
   orgId: string;
   scopes: ScopeWithAccess[];
-  isAdmin: boolean;
+  isOwner: boolean;
   onChanged: () => void;
 }) {
   const [showCreate, setShowCreate] = useState(false);
@@ -597,7 +575,7 @@ function ScopesTab({
 
   return (
     <div>
-      {isAdmin && (
+      {isOwner && (
         <div className="mb-3.5 flex justify-end">
           <Button onClick={() => setShowCreate(true)}>
             <PlusIcon data-icon="inline-start" />
@@ -612,7 +590,7 @@ function ScopesTab({
           title="No workspace, team, or project scopes"
           description="Scopes carve the organization into smaller shared-memory spaces with their own membership."
           action={
-            isAdmin ? (
+            isOwner ? (
               <Button onClick={() => setShowCreate(true)}>
                 <PlusIcon data-icon="inline-start" />
                 New scope
@@ -632,7 +610,7 @@ function ScopesTab({
                     {scope.memoryCount} memor{scope.memoryCount === 1 ? 'y' : 'ies'}
                   </span>
                   <span className="flex-1" />
-                  {isAdmin && (
+                  {isOwner && (
                     <>
                       <Button
                         variant="outline"
@@ -647,14 +625,14 @@ function ScopesTab({
                     </>
                   )}
                 </div>
-                {isAdmin && expandedId === scope.id && <ScopeMembers scopeId={scope.id} />}
+                {isOwner && expandedId === scope.id && <ScopeMembers scopeId={scope.id} />}
               </CardContent>
             </Card>
           ))}
         </div>
       )}
 
-      {isAdmin && showCreate && (
+      {isOwner && showCreate && (
         <CreateScopeModal
           onClose={() => setShowCreate(false)}
           onCreate={async (type, name) => {
@@ -666,7 +644,7 @@ function ScopesTab({
         />
       )}
 
-      {isAdmin && deleteTarget && (
+      {isOwner && deleteTarget && (
         <ConfirmDialog
           title="Delete scope?"
           message={
@@ -890,10 +868,27 @@ function OrgAudit({ orgId }: { orgId: string }) {
   );
 }
 
-function SettingsTab({ org, isAdmin }: { org: Organization; isAdmin: boolean }) {
+function SettingsTab({ org, isOwner }: { org: Organization; isOwner: boolean }) {
   const { mutate } = useSWRConfig();
+  const navigate = useNavigate();
   const [name, setName] = useState(org.name);
   const [pending, setPending] = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
+
+  const deleteOrganization = async () => {
+    try {
+      await api.deleteOrg(org.id);
+      toast.success(`Deleted “${org.name}”`);
+      // Deleting the org revokes access to all of its scopes and memories —
+      // drop every permission-derived snapshot before navigating away.
+      await mutate(isAuthorizationDependentKey, undefined, { revalidate: false });
+      await Promise.allSettled([mutate(keys.orgs), mutate(keys.scopes)]);
+      navigate('/orgs', { replace: true });
+    } catch (err) {
+      toast.error(errorMessage(err));
+      throw err;
+    }
+  };
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -917,12 +912,13 @@ function SettingsTab({ org, isAdmin }: { org: Organization; isAdmin: boolean }) 
   };
 
   return (
-    <Card className="max-w-120">
+    <div className="flex max-w-120 flex-col gap-5">
+    <Card>
       <CardHeader>
         <CardTitle>Organization settings</CardTitle>
       </CardHeader>
       <CardContent>
-        {isAdmin ? (
+        {isOwner ? (
           <form onSubmit={(e) => void submit(e)}>
             <FieldGroup>
               <Field>
@@ -960,11 +956,45 @@ function SettingsTab({ org, isAdmin }: { org: Organization; isAdmin: boolean }) 
               <div className="text-xs/relaxed">{org.name}</div>
             </Field>
             <Alert>
-              <AlertTitle>Only organization admins and owners can change settings.</AlertTitle>
+              <AlertTitle>Only organization owners can change settings.</AlertTitle>
             </Alert>
           </FieldGroup>
         )}
       </CardContent>
     </Card>
+
+    {isOwner && (
+      <Card>
+        <CardHeader>
+          <CardTitle>Danger zone</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap items-center justify-between gap-2.5">
+            <p className="text-xs/relaxed text-muted-foreground">
+              Permanently delete this organization, its scopes, and every memory in them.
+            </p>
+            <Button variant="destructive" onClick={() => setShowDelete(true)}>
+              Delete organization
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    )}
+
+    {isOwner && showDelete && (
+      <ConfirmDialog
+        title="Delete organization?"
+        message={
+          <>
+            Deleting <strong>{org.name}</strong> permanently deletes all of its scopes and
+            memories, and removes every member. This cannot be undone.
+          </>
+        }
+        confirmLabel="Delete organization"
+        onConfirm={deleteOrganization}
+        onClose={() => setShowDelete(false)}
+      />
+    )}
+    </div>
   );
 }

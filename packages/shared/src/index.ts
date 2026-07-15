@@ -25,7 +25,7 @@ export type MemoryKind = (typeof MEMORY_KINDS)[number];
 export const SENSITIVITIES = ['low', 'normal', 'high'] as const;
 export type Sensitivity = (typeof SENSITIVITIES)[number];
 
-export const ORG_ROLES = ['owner', 'admin', 'member'] as const;
+export const ORG_ROLES = ['owner', 'member'] as const;
 export type OrgRole = (typeof ORG_ROLES)[number];
 
 // ---------------------------------------------------------------------------

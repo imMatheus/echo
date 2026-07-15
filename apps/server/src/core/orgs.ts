@@ -86,7 +86,7 @@ export async function renameOrg(app: AppContext, ctx: AuthContext, orgId: string
       .where(and(eq(orgMembers.orgId, orgId), eq(orgMembers.userId, ctx.userId)))
       .limit(1);
     if (!membership) throw notFound('Organization not found');
-    if (membership.role !== 'owner' && membership.role !== 'admin') {
+    if (membership.role !== 'owner') {
       throw forbidden('Your role in this organization does not allow that');
     }
     const [updated] = await tx
@@ -111,6 +111,34 @@ export async function renameOrg(app: AppContext, ctx: AuthContext, orgId: string
     details: { name },
   });
   return mapOrg(row);
+}
+
+export async function deleteOrg(app: AppContext, ctx: AuthContext, orgId: string): Promise<void> {
+  const deleted = await app.db.transaction(async (tx) => {
+    const locked = await tx.execute(sql`SELECT id, name FROM organizations WHERE id = ${orgId} FOR UPDATE`);
+    const org = locked.rows[0] as { id: string; name: string } | undefined;
+    if (!org) throw notFound('Organization not found');
+    const [membership] = await tx
+      .select({ role: orgMembers.role })
+      .from(orgMembers)
+      .where(and(eq(orgMembers.orgId, orgId), eq(orgMembers.userId, ctx.userId)))
+      .limit(1);
+    if (!membership) throw notFound('Organization not found');
+    if (membership.role !== 'owner') {
+      throw forbidden('Only an owner can delete an organization');
+    }
+    // Members, scopes, scope memberships, and memories all cascade.
+    await tx.delete(organizations).where(eq(organizations.id, orgId));
+    return org;
+  });
+  await logAudit(app, {
+    action: 'org.delete',
+    actorUserId: ctx.userId,
+    apiKeyId: ctx.apiKeyId,
+    sourceApp: ctx.sourceApp,
+    orgId,
+    details: { name: deleted.name },
+  });
 }
 
 function mapMember(row: { userId: string; email: string; name: string; role: string; createdAt: Date }): OrgMember {
@@ -157,10 +185,9 @@ export async function addOrgMember(
       .where(and(eq(orgMembers.orgId, orgId), eq(orgMembers.userId, ctx.userId)))
       .limit(1);
     if (!actor) throw notFound('Organization not found');
-    if (actor.role !== 'owner' && actor.role !== 'admin') {
+    if (actor.role !== 'owner') {
       throw forbidden('Your role in this organization does not allow that');
     }
-    if (role === 'owner' && actor.role !== 'owner') throw forbidden('Only an owner can add another owner');
     const [user] = await tx
       .select({ id: users.id, email: users.email, name: users.name })
       .from(users)
@@ -220,13 +247,10 @@ export async function updateOrgMemberRole(
     const actorRole = actor[0]?.role as OrgRole | undefined;
     const targetRole = target[0]?.role as OrgRole | undefined;
     if (!actorRole) throw notFound('Organization not found');
-    if (actorRole !== 'owner' && actorRole !== 'admin') {
+    if (actorRole !== 'owner') {
       throw forbidden('Your role in this organization does not allow that');
     }
     if (!targetRole) throw notFound('That user is not a member of this organization');
-    if ((newRole === 'owner' || targetRole === 'owner') && actorRole !== 'owner') {
-      throw forbidden('Only an owner can change owner roles');
-    }
     if (targetRole === 'owner' && newRole !== 'owner') {
       const [owners] = await tx
         .select({ n: sql<number>`count(*)::int` })
@@ -291,13 +315,10 @@ export async function removeOrgMember(
     const actorRole = actor[0]?.role as OrgRole | undefined;
     const targetRole = target[0]?.role as OrgRole | undefined;
     if (!actorRole) throw notFound('Organization not found');
-    if (!leavingSelf && actorRole !== 'owner' && actorRole !== 'admin') {
+    if (!leavingSelf && actorRole !== 'owner') {
       throw forbidden('Your role in this organization does not allow that');
     }
     if (!targetRole) throw notFound('That user is not a member of this organization');
-    if (targetRole === 'owner' && !leavingSelf && actorRole !== 'owner') {
-      throw forbidden('Only an owner can remove another owner');
-    }
     if (targetRole === 'owner') {
       const [owners] = await tx
         .select({ n: sql<number>`count(*)::int` })
@@ -342,7 +363,7 @@ export async function createOrgScope(
       .where(and(eq(orgMembers.orgId, input.orgId), eq(orgMembers.userId, ctx.userId)))
       .limit(1);
     if (!actor) throw notFound('Organization not found');
-    if (actor.role !== 'owner' && actor.role !== 'admin') {
+    if (actor.role !== 'owner') {
       throw forbidden('Your role in this organization does not allow that');
     }
     const [created] = await tx
@@ -400,7 +421,7 @@ export async function deleteOrgScope(app: AppContext, ctx: AuthContext, scopeId:
       .where(and(eq(orgMembers.orgId, scope.orgId), eq(orgMembers.userId, ctx.userId)))
       .limit(1);
     if (!actor) throw notFound('Scope not found');
-    if (actor.role !== 'owner' && actor.role !== 'admin') {
+    if (actor.role !== 'owner') {
       throw forbidden('Your role in this organization does not allow that');
     }
     // Check the special type only after authorization to avoid a cross-org
@@ -466,7 +487,7 @@ export async function addScopeMember(app: AppContext, ctx: AuthContext, scopeId:
       .where(and(eq(orgMembers.orgId, scope.orgId), eq(orgMembers.userId, ctx.userId)))
       .limit(1);
     if (!actor) throw notFound('Scope not found');
-    if (actor.role !== 'owner' && actor.role !== 'admin') {
+    if (actor.role !== 'owner') {
       throw forbidden('Your role in this organization does not allow that');
     }
     if (currentScope.type === 'organization') {
@@ -522,7 +543,7 @@ export async function removeScopeMember(app: AppContext, ctx: AuthContext, scope
       .where(and(eq(orgMembers.orgId, scope.orgId), eq(orgMembers.userId, ctx.userId)))
       .limit(1);
     if (!actor) throw notFound('Scope not found');
-    if (actor.role !== 'owner' && actor.role !== 'admin') {
+    if (actor.role !== 'owner') {
       throw forbidden('Your role in this organization does not allow that');
     }
     if (currentScope.type === 'organization') {

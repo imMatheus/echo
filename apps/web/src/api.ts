@@ -262,6 +262,10 @@ export function updateOrg(id: string, body: { name: string }): Promise<{ org: Or
   });
 }
 
+export function deleteOrg(id: string): Promise<{ ok: true }> {
+  return request<{ ok: true }>(`/orgs/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
 export function listOrgMembers(orgId: string): Promise<{ members: OrgMember[] }> {
   return request<{ members: OrgMember[] }>(`/orgs/${encodeURIComponent(orgId)}/members`);
 }

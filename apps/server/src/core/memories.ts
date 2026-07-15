@@ -164,7 +164,7 @@ interface LockedScopeAccess extends Record<string, unknown> {
 const lockedScopeAccessQuery = (userId: string, scopeId: string): SQL => sql`
   SELECT s.id,
          s.org_id AS "orgId",
-         (s.type = 'personal' OR om.role IN ('owner', 'admin')) AS "canManage"
+         (s.type = 'personal' OR om.role = 'owner') AS "canManage"
   FROM scopes s
   LEFT JOIN org_members om ON om.org_id = s.org_id AND om.user_id = ${userId}
   LEFT JOIN scope_members sm ON sm.scope_id = s.id AND sm.user_id = ${userId}
@@ -173,7 +173,7 @@ const lockedScopeAccessQuery = (userId: string, scopeId: string): SQL => sql`
       (s.type = 'personal' AND s.user_id = ${userId})
       OR (
         om.user_id IS NOT NULL
-        AND (s.type = 'organization' OR sm.user_id IS NOT NULL OR om.role IN ('owner', 'admin'))
+        AND (s.type = 'organization' OR sm.user_id IS NOT NULL OR om.role = 'owner')
       )
     )
   FOR SHARE OF s`;

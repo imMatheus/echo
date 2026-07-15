@@ -63,7 +63,6 @@ export function SourceChip({ app, className }: { app: string; className?: string
 
 const ROLE_CLASSES: Record<OrgRole, string | undefined> = {
   owner: 'border-scope-personal/30 bg-scope-personal/10 text-scope-personal',
-  admin: 'border-scope-organization/30 bg-scope-organization/10 text-scope-organization',
   member: undefined,
 };
 

@@ -36,6 +36,13 @@
       "when": 1784094143317,
       "tag": "0004_remove_organization_slug",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1784139094198,
+      "tag": "0005_drop_admin_role",
+      "breakpoints": true
     }
   ]
 }

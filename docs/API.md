@@ -46,24 +46,25 @@ Codes: `unauthorized` (401), `forbidden` (403), `not_found` (404), `validation_e
 
 ## Scopes
 
-- `GET /scopes` → `{ scopes: ScopeWithAccess[] }` — everything the caller can read: their personal scope, org scopes of orgs they belong to, and workspace/team/project scopes they're a member of (org owners/admins see all scopes in their org).
-- `POST /scopes` `CreateScopeRequest` `{ orgId, type: workspace|team|project, name }` → `{ scope }` — org admin/owner only. Creator is added as a scope member.
-- `DELETE /scopes/:id` → `{ ok: true }` — org admin/owner only; `organization` and `personal` scopes cannot be deleted. Deletes the scope's memories.
+- `GET /scopes` → `{ scopes: ScopeWithAccess[] }` — everything the caller can read: their personal scope, org scopes of orgs they belong to, and workspace/team/project scopes they're a member of (org owners see all scopes in their org).
+- `POST /scopes` `CreateScopeRequest` `{ orgId, type: workspace|team|project, name }` → `{ scope }` — org owner only. Creator is added as a scope member.
+- `DELETE /scopes/:id` → `{ ok: true }` — org owner only; `organization` and `personal` scopes cannot be deleted. Deletes the scope's memories.
 - `GET /scopes/:id/members` → `{ members: ScopeMember[] }`
-- `POST /scopes/:id/members` `{ email }` → `{ member }` — org admin/owner only; user must already be an org member.
-- `DELETE /scopes/:id/members/:userId` → `{ ok: true }` — org admin/owner only.
+- `POST /scopes/:id/members` `{ email }` → `{ member }` — org owner only; user must already be an org member.
+- `DELETE /scopes/:id/members/:userId` → `{ ok: true }` — org owner only.
 
 ## Organizations
 
 - `GET /orgs` → `{ orgs: OrganizationWithRole[] }`
 - `POST /orgs` `{ name }` → `{ org }` — creator becomes `owner`; an `organization`-type scope is auto-created.
 - `GET /orgs/:id` → `{ org, role }`
-- `PATCH /orgs/:id` `{ name }` → `{ org }` — admin/owner.
+- `PATCH /orgs/:id` `{ name }` → `{ org }` — owner only.
+- `DELETE /orgs/:id` → `{ ok: true }` — owner only. Permanently deletes the organization, all of its scopes, their memories, and every membership.
 - `GET /orgs/:id/members` → `{ members: OrgMember[] }` — any member.
-- `POST /orgs/:id/members` `{ email, role? }` → `{ member }` — admin/owner. The user must already have an Echo account (v1 has no email invites).
-- `PATCH /orgs/:id/members/:userId` `{ role }` → `{ member }` — owner only for granting/revoking `owner`; admin+ otherwise. The last owner cannot be demoted.
-- `DELETE /orgs/:id/members/:userId` → `{ ok: true }` — admin/owner, or yourself (leave). The last owner cannot be removed.
-- `GET /orgs/:id/audit?limit&offset&action` → `AuditListResponse` — admin/owner only; offset max 100,000. Org-scoped events only; personal memories never appear here.
+- `POST /orgs/:id/members` `{ email, role? }` → `{ member }` — owner only. The user must already have an Echo account (v1 has no email invites).
+- `PATCH /orgs/:id/members/:userId` `{ role }` → `{ member }` — owner only. The last owner cannot be demoted.
+- `DELETE /orgs/:id/members/:userId` → `{ ok: true }` — owner, or yourself (leave). The last owner cannot be removed.
+- `GET /orgs/:id/audit?limit&offset&action` → `AuditListResponse` — owner only; offset max 100,000. Org-scoped events only; personal memories never appear here.
 
 ## API keys
 

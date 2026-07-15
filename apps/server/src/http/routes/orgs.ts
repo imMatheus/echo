@@ -5,6 +5,7 @@ import { listOrgAudit } from '@/core/audit';
 import {
   addOrgMember,
   createOrg,
+  deleteOrg,
   getOrg,
   listOrgMembers,
   listOrgs,
@@ -58,6 +59,13 @@ export function orgRoutes(app: AppContext) {
       return { org: await renameOrg(app, ctx, id, name) };
     });
 
+    f.delete('/orgs/:id', async (req) => {
+      const ctx = await requireAuth(app, req);
+      const { id } = parse(idParam, req.params);
+      await deleteOrg(app, ctx, id);
+      return { ok: true };
+    });
+
     f.get('/orgs/:id/members', async (req) => {
       const ctx = await requireAuth(app, req);
       const { id } = parse(idParam, req.params);
@@ -93,7 +101,7 @@ export function orgRoutes(app: AppContext) {
     f.get('/orgs/:id/audit', async (req) => {
       const ctx = await requireAuth(app, req);
       const { id } = parse(idParam, req.params);
-      await requireOrgRole(app, id, ctx.userId, ['owner', 'admin']);
+      await requireOrgRole(app, id, ctx.userId, ['owner']);
       const query = parse(auditQuerySchema, req.query);
       return listOrgAudit(app, id, query);
     });

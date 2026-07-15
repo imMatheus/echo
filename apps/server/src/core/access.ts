@@ -4,12 +4,12 @@ import type { AppContext } from '@/types';
 
 /**
  * Access rules (the privacy boundary of the whole system):
- *  - personal scopes are visible ONLY to their owner — never to coworkers or org admins;
+ *  - personal scopes are visible ONLY to their owner — never to coworkers or org owners;
  *  - the organization scope is visible to every member of the org;
  *  - workspace/team/project scopes are visible to their scope members, plus org
- *    owners/admins (who manage them);
+ *    owners (who manage them);
  *  - canManage (edit members, delete scope, moderate any memory) = scope owner for
- *    personal, org owner/admin for org-owned scopes.
+ *    personal, org owner for org-owned scopes.
  */
 export interface ScopeAccess {
   id: string;
@@ -48,7 +48,7 @@ const accessSelect = (userId: string, includeMemoryCount: boolean): SQL => sql`
 const accessWhere = (userId: string): SQL => sql`
   ((s.type = 'personal' AND s.user_id = ${userId})
    OR (om.user_id IS NOT NULL
-       AND (s.type = 'organization' OR sm.user_id IS NOT NULL OR om.role IN ('owner', 'admin'))))`;
+       AND (s.type = 'organization' OR sm.user_id IS NOT NULL OR om.role = 'owner')))`;
 
 /**
  * Authorization subquery for memory reads. Keeping this predicate inside the
@@ -63,7 +63,7 @@ export const accessibleScopeIdsQuery = (userId: string): SQL => sql`
 
 function mapAccess(row: any): ScopeAccess {
   const isPersonal = row.type === 'personal';
-  const isOrgAdmin = row.org_role === 'owner' || row.org_role === 'admin';
+  const isOrgOwner = row.org_role === 'owner';
   return {
     id: row.id,
     type: row.type,
@@ -74,7 +74,7 @@ function mapAccess(row: any): ScopeAccess {
     // Raw db.execute returns timestamps/ints as strings — normalize to the declared types.
     createdAt: new Date(row.created_at),
     canWrite: true, // every readable scope is writable in v1
-    canManage: isPersonal || isOrgAdmin,
+    canManage: isPersonal || isOrgOwner,
     memoryCount: Number(row.memory_count),
   };
 }

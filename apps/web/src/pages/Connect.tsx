@@ -380,48 +380,48 @@ export default function ConnectPage() {
         <p className="mt-0.5 text-xs/relaxed text-muted-foreground">
           Every connected app gets these five MCP tools, limited to the scopes its key can access.
         </p>
-        <div className="mt-4 overflow-hidden rounded-xl border bg-card shadow-card">
-          <ul className="divide-y">
-            {MCP_TOOLS.map((tool, i) => (
-              <li key={tool.name} className="flex items-start gap-3 px-4 py-3 sm:items-center">
+        <ul className="mt-5 grid gap-x-6 gap-y-5 sm:grid-cols-2 xl:grid-cols-3">
+          {MCP_TOOLS.map((tool, i) => (
+            <li key={tool.name} className="flex items-center gap-3.5">
+              <span className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-muted">
                 <span
-                  className="flex size-7 shrink-0 items-center justify-center rounded-lg"
+                  className="flex size-8 items-center justify-center rounded-full"
                   style={solidTileStyle(CHART_COLORS[i % CHART_COLORS.length])}
                 >
-                  <tool.icon aria-hidden className="size-3.5" />
+                  <tool.icon aria-hidden className="size-4" />
                 </span>
-                <div className="flex min-w-0 flex-1 flex-col gap-0.5 sm:flex-row sm:items-baseline sm:gap-4">
-                  <code className="shrink-0 font-mono text-xs font-medium sm:w-40">{tool.name}</code>
-                  <p className="text-xs/relaxed text-muted-foreground">{tool.description}</p>
-                </div>
-              </li>
-            ))}
-          </ul>
-          {meta && (
-            <div className="flex items-start gap-2 border-t bg-muted/20 px-4 py-2.5 text-xs/relaxed text-muted-foreground">
-              <span
-                className={cn(
-                  'mt-1 size-2 shrink-0 rounded-full',
-                  meta.embeddings ? 'bg-success' : 'bg-warning',
-                )}
-              />
-              <span>
-                {meta.embeddings ? (
-                  <>
-                    <code className={INLINE_CODE}>recall_context</code> runs semantic search via{' '}
-                    {meta.embeddings.provider}/{meta.embeddings.model}.
-                  </>
-                ) : (
-                  <>
-                    <code className={INLINE_CODE}>recall_context</code> is keyword-only right now — set{' '}
-                    <code className={INLINE_CODE}>EMBEDDINGS_PROVIDER</code> on the server to enable semantic
-                    search.
-                  </>
-                )}
               </span>
-            </div>
-          )}
-        </div>
+              <div className="min-w-0">
+                <code className="font-mono text-xs font-semibold">{tool.name}</code>
+                <p className="mt-0.5 text-xs/relaxed text-muted-foreground">{tool.description}</p>
+              </div>
+            </li>
+          ))}
+        </ul>
+        {meta && (
+          <div className="mt-5 flex items-start gap-2 rounded-lg border bg-muted/20 px-3.5 py-2.5 text-xs/relaxed text-muted-foreground">
+            <span
+              className={cn(
+                'mt-1 size-2 shrink-0 rounded-full',
+                meta.embeddings ? 'bg-success' : 'bg-warning',
+              )}
+            />
+            <span>
+              {meta.embeddings ? (
+                <>
+                  <code className={INLINE_CODE}>recall_context</code> runs semantic search via{' '}
+                  {meta.embeddings.provider}/{meta.embeddings.model}.
+                </>
+              ) : (
+                <>
+                  <code className={INLINE_CODE}>recall_context</code> is keyword-only right now — set{' '}
+                  <code className={INLINE_CODE}>EMBEDDINGS_PROVIDER</code> on the server to enable semantic
+                  search.
+                </>
+              )}
+            </span>
+          </div>
+        )}
       </section>
 
       <section className="mt-10 border-t pt-6">

@@ -91,7 +91,7 @@ export const orgMembers = pgTable(
   (t) => [
     primaryKey({ columns: [t.orgId, t.userId] }),
     index('org_members_user_idx').on(t.userId),
-    check('org_members_role_check', sql`${t.role} IN ('owner', 'admin', 'member')`),
+    check('org_members_role_check', sql`${t.role} IN ('owner', 'member')`),
   ],
 );
 

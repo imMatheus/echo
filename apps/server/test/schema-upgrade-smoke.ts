@@ -57,6 +57,16 @@ try {
       `INSERT INTO org_members (org_id, user_id, role) VALUES ($1, $2, 'member')`,
       [org.rows[0].id, user.rows[0].id],
     );
+    const legacyAdmin = await legacy.query<{ id: string }>(
+      `INSERT INTO users (email, name, password_hash)
+       VALUES ($1, 'Legacy Admin', 'unused')
+       RETURNING id`,
+      [`legacy-admin-${databaseName}@example.com`],
+    );
+    await legacy.query(
+      `INSERT INTO org_members (org_id, user_id, role) VALUES ($1, $2, 'admin')`,
+      [org.rows[0].id, legacyAdmin.rows[0].id],
+    );
     const scope = await legacy.query<{ id: string }>(
       `INSERT INTO scopes (type, name, org_id)
        VALUES ('organization', 'Legacy Organization', $1)
@@ -101,13 +111,19 @@ try {
     const result = await verified.query<{
       migrationCount: number;
       ownerRole: string;
+      adminDemoted: boolean;
       tsvRebuilt: boolean;
       embeddingCleared: boolean;
       scopeMembershipRepaired: boolean;
     }>(`
       SELECT
         (SELECT count(*)::int FROM drizzle.__drizzle_migrations) AS "migrationCount",
-        (SELECT role FROM org_members LIMIT 1) AS "ownerRole",
+        (SELECT member.role FROM org_members AS member
+         JOIN users AS u ON u.id = member.user_id
+         WHERE u.name = 'Legacy Owner') AS "ownerRole",
+        (SELECT member.role = 'member' FROM org_members AS member
+         JOIN users AS u ON u.id = member.user_id
+         WHERE u.name = 'Legacy Admin') AS "adminDemoted",
         (SELECT tsv IS NOT NULL FROM memories LIMIT 1) AS "tsvRebuilt",
         (SELECT embedding IS NULL AND embedding_model IS NULL AND embedding_dimensions IS NULL
          FROM memories LIMIT 1) AS "embeddingCleared",
@@ -118,8 +134,9 @@ try {
     const state = result.rows[0];
     if (
       !state ||
-      state.migrationCount !== 5 ||
+      state.migrationCount !== 6 ||
       state.ownerRole !== 'owner' ||
+      !state.adminDemoted ||
       !state.tsvRebuilt ||
       !state.embeddingCleared ||
       !state.scopeMembershipRepaired

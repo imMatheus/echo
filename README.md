@@ -16,7 +16,7 @@ Echo is an open-source, self-hostable memory layer that lets AI tools — Claude
 Every AI app builds its own memory silo. Your preferences live in ChatGPT, your codebase conventions in Cursor, your team's BigQuery table meanings nowhere at all. Echo is a single, model-agnostic, user-controlled context store:
 
 - **Structured memories, not chat logs** — each memory records its scope, source app, confidence, explicit-vs-inferred provenance, sensitivity, and optional expiry.
-- **Scoped access control** — `personal`, `organization`, `workspace`, `team`, and `project` scopes. Personal memories are never visible to coworkers or org admins. Org memories are shared only with members.
+- **Scoped access control** — `personal`, `organization`, `workspace`, `team`, and `project` scopes. Personal memories are never visible to coworkers or org owners. Org memories are shared only with members.
 - **Audit everything** — every write, and every read made by a connected app, is logged with actor, app, and scope.
 - **Semantic recall** — Postgres + pgvector hybrid search (vector + full-text, reciprocal-rank fusion). Embedding providers are pluggable (OpenAI, Voyage, Ollama) and optional — with none configured, search falls back to full-text and everything still works offline.
 - **Open source, one-command deploy** — run the private/self-hosted build with Docker Compose. Public multi-tenant deployment needs the identity hardening described below.
@@ -104,7 +104,7 @@ Then configure the client (Node.js 20 or newer) with the absolute path to the bu
 }
 ```
 
-**Privacy boundaries.** Personal scopes are visible only to their owner — not to coworkers, not to org admins. Org-owned scopes are visible to org members (workspace/team/project scopes to their members plus org admins). Org audit logs contain only org-scoped events, and recall queries are never written to org audit rows — only result counts and memory ids.
+**Privacy boundaries.** Personal scopes are visible only to their owner — not to coworkers, not to org owners. Org-owned scopes are visible to org members (workspace/team/project scopes to their members plus org owners). Org audit logs contain only org-scoped events, and recall queries are never written to org audit rows — only result counts and memory ids.
 
 ## Configuration
 

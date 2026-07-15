@@ -13,7 +13,7 @@ import { AuditListSkeleton } from './Skeletons';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { AUDIT_CATEGORIES, actionIcon, actionLabel, auditCategory, auditTileStyle, detailSummary } from '@/lib/audit';
+import { AUDIT_CATEGORIES, actionLabel, detailSummary } from '@/lib/audit';
 import { useDebouncedValue } from '@/lib/use-debounced';
 import { cn } from '@/lib/utils';
 
@@ -209,8 +209,6 @@ function AuditRow({
   showActor: boolean;
   onToggle: () => void;
 }) {
-  const category = auditCategory(entry.action);
-  const Icon = actionIcon(entry.action);
   const summary = detailSummary(entry);
 
   return (
@@ -219,22 +217,16 @@ function AuditRow({
         type="button"
         onClick={onToggle}
         aria-expanded={isOpen}
-        className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-muted/40"
+        className="flex w-full items-center gap-3 px-4 py-1.5 text-left transition-colors hover:bg-muted/40"
       >
-        <span
-          className="flex size-7 shrink-0 items-center justify-center rounded-lg"
-          style={auditTileStyle(category)}
-        >
-          <Icon className="size-3.5" />
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="flex min-w-0 items-baseline gap-2">
-            <span className="truncate text-[13px]/5 font-medium">{actionLabel(entry.action)}</span>
-            {showActor && entry.actorName && (
-              <span className="truncate text-[11px] text-muted-foreground">by {entry.actorName}</span>
-            )}
-          </span>
-          {summary && <span className="mt-0.5 block truncate text-xs text-muted-foreground">{summary}</span>}
+        <span className="flex min-w-0 flex-1 items-baseline gap-2">
+          <span className="whitespace-nowrap text-[13px]/6 font-medium">{actionLabel(entry.action)}</span>
+          {showActor && entry.actorName && (
+            <span className="max-w-40 shrink-0 truncate text-[11px] text-muted-foreground">
+              by {entry.actorName}
+            </span>
+          )}
+          {summary && <span className="truncate text-xs text-muted-foreground">{summary}</span>}
         </span>
         {entry.apiKeyName && (
           <span className="flex min-w-0 items-center gap-1 text-[11px] text-muted-foreground max-md:hidden">
@@ -290,7 +282,7 @@ function AuditRowDetails({ entry }: { entry: AuditEntry }) {
   const details = Object.entries(entry.details);
 
   return (
-    <div className="space-y-3 border-t bg-muted/20 px-4 py-3 sm:pl-14">
+    <div className="space-y-3 border-t bg-muted/20 px-4 py-3">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-muted-foreground">
         <Badge variant="outline" className="rounded-md font-mono">
           {entry.action}

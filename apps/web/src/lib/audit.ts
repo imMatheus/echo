@@ -127,6 +127,7 @@ export const ACTION_LABELS: Record<string, string> = {
   'auth.signup': 'Signup',
   'org.create': 'Org created',
   'org.update': 'Org updated',
+  'org.delete': 'Org deleted',
   'org.member_add': 'Org member added',
   'org.member_update': 'Org member updated',
   'org.member_remove': 'Org member removed',
@@ -213,6 +214,7 @@ export function detailSummary(entry: AuditEntry): string | null {
     case 'auth.signup':
       return asString(d.email);
     case 'org.create':
+    case 'org.delete':
       return asString(d.name);
     case 'org.update': {
       const name = asString(d.name);

@@ -133,11 +133,10 @@ export function AuditListSkeleton({ rows = 8 }: { rows?: number }) {
       </div>
       <div className="divide-y">
         {Array.from({ length: rows }, (_, i) => (
-          <div key={i} className="flex items-center gap-3 px-4 py-2.5">
-            <Skeleton className="size-7 shrink-0 rounded-lg" />
-            <div className="min-w-0 flex-1">
-              <Line box="h-5" bar="h-3.5 w-40 max-w-full" />
-              <Line box="mt-0.5 h-4" bar="h-3 w-56 max-w-full" />
+          <div key={i} className="flex items-center gap-3 px-4 py-1.5">
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              <Line box="h-6" bar="h-3.5 w-32 max-w-full" />
+              <Line box="h-6" bar="h-3 w-48 max-w-full" />
             </div>
             <Skeleton className="h-3 w-10 shrink-0" />
           </div>
