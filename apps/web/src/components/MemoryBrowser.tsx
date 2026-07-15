@@ -11,11 +11,11 @@ import { KindBadge, ScopeBadge, SensitivityBadge, SourceChip, Tag } from './Badg
 import { EmptyState } from './EmptyState';
 import { MemoryFormModal } from './MemoryFormModal';
 import { PageHeader } from './PageHeader';
-import { PageLoading } from './PageLoading';
 import { Pagination } from './Pagination';
 import { RelativeTime } from './RelativeTime';
 import { RequestErrorState } from './RequestErrorState';
 import { ScopeSelectItems, scopeSelectItems } from './ScopeOptions';
+import { MemoryGridSkeleton } from './Skeletons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -383,7 +383,7 @@ export function MemoryBrowser({
           </div>
         )
       ) : isLoading && memories === null ? (
-        <PageLoading />
+        <MemoryGridSkeleton />
       ) : memories && memories.length === 0 ? (
         hasFilters ? (
           <EmptyState

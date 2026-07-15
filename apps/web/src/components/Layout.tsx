@@ -1,7 +1,7 @@
 import {
   Building2Icon,
-  HomeIcon,
   LayersIcon,
+  LayoutDashboardIcon,
   LogOutIcon,
   MonitorIcon,
   MoonIcon,
@@ -41,7 +41,12 @@ function initials(name: string): string {
 }
 
 const NAV_ITEMS = [
-  { to: '/', label: 'Home', icon: <HomeIcon />, end: true },
+  {
+    to: '/dashboard',
+    label: 'Dashboard',
+    icon: <LayoutDashboardIcon />,
+    end: true,
+  },
   { to: '/memories', label: 'Memories', icon: <LayersIcon />, end: false },
   { to: '/audit', label: 'Audit Log', icon: <ScrollTextIcon />, end: false },
   { to: '/orgs', label: 'Organizations', icon: <Building2Icon />, end: false },
@@ -73,9 +78,9 @@ export function Layout() {
       </a>
       {/* Collapses to an icon rail below md; labels stay for screen readers. */}
       <aside className="fixed inset-y-0 left-0 z-10 flex w-60 flex-col border-r border-sidebar-border bg-sidebar p-3 pt-4 text-sidebar-foreground max-md:w-14 max-md:p-2 max-md:pt-4">
-        <div className="flex items-center gap-2.5 px-2.5 pb-4 max-md:justify-center max-md:px-0">
+        <div className="flex items-center gap-2.5 px-1 pb-4 max-md:justify-center max-md:px-0">
           <LogoMark />
-          <span className="font-heading text-[17px] font-bold tracking-tight max-md:sr-only">
+          <span className="font-heading text-[16px] font-bold tracking-tight max-md:sr-only">
             Echo
           </span>
         </div>

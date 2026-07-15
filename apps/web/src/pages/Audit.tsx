@@ -24,6 +24,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from '@/components/ui/chart'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useStats } from '@/hooks'
 import { AUDIT_CATEGORIES, OTHER_CATEGORY, auditCategory } from '@/lib/audit'
@@ -129,7 +130,7 @@ export default function AuditPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const rawRange = searchParams.get('range')
   const range = isStatsRange(rawRange) ? rawRange : '7d'
-  const { data: stats, isValidating } = useStats(range)
+  const { data: stats, error, isValidating } = useStats(range)
 
   return (
     <div>
@@ -137,43 +138,52 @@ export default function AuditPage() {
         title="Audit Log"
         subtitle="Every action taken by you or your API keys — writes, recalls, and changes."
       />
-      {stats && (
-        <Card
-          size="sm"
-          className={cn(
-            'mb-4 transition-opacity',
-            isValidating && 'opacity-60',
-          )}
-        >
-          <CardHeader>
-            <CardTitle>Activity</CardTitle>
-            <CardDescription>
-              Audit events per {stats.granularity}, by event type.
-            </CardDescription>
-            <CardAction>
-              <Tabs
-                value={range}
-                onValueChange={(value) =>
-                  setSearchParams(value === '7d' ? {} : { range: value }, {
-                    replace: true,
-                  })
-                }
-              >
-                <TabsList>
-                  {STATS_RANGES.map((r) => (
-                    <TabsTrigger key={r} value={r} className="px-2.5">
-                      {r}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
-              </Tabs>
-            </CardAction>
-          </CardHeader>
-          <CardContent>
+      <Card
+        size="sm"
+        className={cn(
+          'mb-4 transition-opacity',
+          stats && isValidating && 'opacity-60',
+        )}
+      >
+        <CardHeader>
+          <CardTitle>Activity</CardTitle>
+          <CardDescription>
+            {stats
+              ? `Audit events per ${stats.granularity}, by event type.`
+              : 'Audit events over time, by event type.'}
+          </CardDescription>
+          <CardAction>
+            <Tabs
+              value={range}
+              onValueChange={(value) =>
+                setSearchParams(value === '7d' ? {} : { range: value }, {
+                  replace: true,
+                })
+              }
+            >
+              <TabsList>
+                {STATS_RANGES.map((r) => (
+                  <TabsTrigger key={r} value={r} className="px-2.5">
+                    {r}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
+          </CardAction>
+        </CardHeader>
+        <CardContent>
+          {stats ? (
             <ActivityByCategoryChart stats={stats} />
-          </CardContent>
-        </Card>
-      )}
+          ) : error ? (
+            <ChartEmpty
+              className="h-48"
+              message="Couldn't load activity stats."
+            />
+          ) : (
+            <Skeleton className="h-48 w-full" aria-hidden />
+          )}
+        </CardContent>
+      </Card>
       <AuditTable fetchPage={fetchPage} scopeKey="personal" />
     </div>
   )

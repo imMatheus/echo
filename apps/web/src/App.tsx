@@ -1,4 +1,4 @@
-import { Component, lazy, Suspense, useState } from 'react';
+import { Component, useState } from 'react';
 import type { ReactNode } from 'react';
 import { ThemeProvider } from 'next-themes';
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
@@ -7,21 +7,20 @@ import { SWRConfig } from 'swr';
 import { errorMessage } from './api';
 import { AuthProvider, useAuth } from './auth';
 import { Layout } from './components/Layout';
-import { PageLoading } from './components/PageLoading';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { Toaster } from '@/components/ui/sonner';
-
-const AuditPage = lazy(() => import('./pages/Audit'));
-const ConnectPage = lazy(() => import('./pages/Connect'));
-const HomePage = lazy(() => import('./pages/Home'));
-const LoginPage = lazy(() => import('./pages/Login'));
-const MemoriesPage = lazy(() => import('./pages/Memories'));
-const MemoryDetailPage = lazy(() => import('./pages/MemoryDetail'));
-const MemoryDetailModal = lazy(() => import('./components/MemoryDetailModal'));
-const OrgDetailPage = lazy(() => import('./pages/OrgDetail'));
-const OrgsPage = lazy(() => import('./pages/Orgs'));
-const SignupPage = lazy(() => import('./pages/Signup'));
+import MemoryDetailModal from './components/MemoryDetailModal';
+import AuditPage from './pages/Audit';
+import ConnectPage from './pages/Connect';
+import DashboardPage from './pages/Dashboard';
+import LandingPage from './pages/Landing';
+import LoginPage from './pages/Login';
+import MemoriesPage from './pages/Memories';
+import MemoryDetailPage from './pages/MemoryDetail';
+import OrgDetailPage from './pages/OrgDetail';
+import OrgsPage from './pages/Orgs';
+import SignupPage from './pages/Signup';
 
 function FullScreenLoading() {
   return (
@@ -92,7 +91,7 @@ function Page({ children }: { children: ReactNode }) {
   const { pathname } = useLocation();
   return (
     <PageErrorBoundary key={pathname}>
-      <Suspense fallback={<PageLoading />}>{children}</Suspense>
+      {children}
     </PageErrorBoundary>
   );
 }
@@ -102,6 +101,18 @@ function RequireAuth({ children }: { children: ReactNode }) {
   if (loading) return <FullScreenLoading />;
   if (!user) return <Navigate to="/login" replace />;
   return <>{children}</>;
+}
+
+/** "/" is the public landing page; signed-in users go straight to /dashboard. */
+function RootRoute() {
+  const { user, loading } = useAuth();
+  if (loading) return <FullScreenLoading />;
+  if (user) return <Navigate to="/dashboard" replace />;
+  return (
+    <Page>
+      <LandingPage />
+    </Page>
+  );
 }
 
 function AppRoutes() {
@@ -114,6 +125,7 @@ function AppRoutes() {
   return (
     <>
       <Routes location={background ?? location}>
+        <Route path="/" element={<RootRoute />} />
         <Route path="/login" element={<Page><LoginPage /></Page>} />
         <Route path="/signup" element={<Page><SignupPage /></Page>} />
         <Route
@@ -123,7 +135,7 @@ function AppRoutes() {
             </RequireAuth>
           }
         >
-          <Route path="/" element={<Page><HomePage /></Page>} />
+          <Route path="/dashboard" element={<Page><DashboardPage /></Page>} />
           <Route path="/memories" element={<Page><MemoriesPage /></Page>} />
           <Route path="/memories/:id" element={<Page><MemoryDetailPage /></Page>} />
           <Route path="/keys" element={<Navigate to="/connect" replace />} />
@@ -131,8 +143,9 @@ function AppRoutes() {
           <Route path="/orgs" element={<Page><OrgsPage /></Page>} />
           <Route path="/orgs/:id" element={<Page><OrgDetailPage /></Page>} />
           <Route path="/connect" element={<Page><ConnectPage /></Page>} />
-          <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
+        {/* Unknown paths fall back to "/" — landing when signed out, /dashboard when signed in. */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
 
       {background && (

@@ -31,9 +31,14 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { EmptyState } from '@/components/EmptyState';
 import { MemoryBrowser } from '@/components/MemoryBrowser';
 import { PageHeader } from '@/components/PageHeader';
-import { PageLoading } from '@/components/PageLoading';
 import { RelativeTime } from '@/components/RelativeTime';
 import { RequestErrorState } from '@/components/RequestErrorState';
+import {
+  AuditListSkeleton,
+  MemoryFiltersSkeleton,
+  MemoryGridSkeleton,
+  TableSkeleton,
+} from '@/components/Skeletons';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -53,6 +58,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
 import {
   Table,
@@ -102,7 +108,39 @@ export default function OrgDetailPage() {
     (error instanceof ApiRequestError && (error.status === 404 || error.status === 403)) ||
     Boolean(org && allScopes && !allScopes.some((scope) => scope.orgId === orgId));
 
-  if (orgLoading || scopesLoading) return <PageLoading />;
+  const tabsNav = (
+    <Tabs
+      value={tab}
+      onValueChange={(value) => setSearchParams(value === 'memories' ? {} : { tab: value as string })}
+      className="mb-5"
+    >
+      <TabsList className="max-w-full justify-start overflow-x-auto">
+        {TABS.map((t) => (
+          <TabsTrigger key={t} value={t}>
+            {t.charAt(0).toUpperCase() + t.slice(1)}
+          </TabsTrigger>
+        ))}
+      </TabsList>
+    </Tabs>
+  );
+
+  const backLink = (
+    <Link to="/orgs" className="text-xs text-muted-foreground hover:text-foreground">
+      ← Organizations
+    </Link>
+  );
+
+  if (orgLoading || scopesLoading) {
+    // The org name and role are still in flight, but the back link and tab
+    // strip are static — keep them usable and skeleton only the data areas.
+    return (
+      <div>
+        <PageHeader title={<Skeleton className="h-7 w-44" />} backLink={backLink} />
+        {tabsNav}
+        <OrgTabSkeleton tab={tab} />
+      </div>
+    );
+  }
 
   if (!notFound && ((!org && error) || (!allScopes && scopesError))) {
     const loadError = !org && error && !notFound ? error : scopesError;
@@ -139,33 +177,13 @@ export default function OrgDetailPage() {
 
   return (
     <div>
-      <PageHeader
-        title={org.name}
-        titleExtra={<RoleBadge role={role} />}
-        backLink={
-          <Link to="/orgs" className="text-xs text-muted-foreground hover:text-foreground">
-            ← Organizations
-          </Link>
-        }
-      />
+      <PageHeader title={org.name} titleExtra={<RoleBadge role={role} />} backLink={backLink} />
 
-      <Tabs
-        value={tab}
-        onValueChange={(value) => setSearchParams(value === 'memories' ? {} : { tab: value as string })}
-        className="mb-5"
-      >
-        <TabsList className="max-w-full justify-start overflow-x-auto">
-          {TABS.map((t) => (
-            <TabsTrigger key={t} value={t}>
-              {t.charAt(0).toUpperCase() + t.slice(1)}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-      </Tabs>
+      {tabsNav}
 
       {tab === 'memories' &&
         (scopes === null ? (
-          <PageLoading />
+          <OrgTabSkeleton tab="memories" />
         ) : scopes.length === 0 ? (
           <Alert>
             <AlertTitle>This organization has no scopes you can access.</AlertTitle>
@@ -202,6 +220,33 @@ export default function OrgDetailPage() {
       {tab === 'settings' && <SettingsTab org={org} isAdmin={isAdmin} />}
     </div>
   );
+}
+
+/** Loading stand-in shaped like whichever tab is selected. */
+function OrgTabSkeleton({ tab }: { tab: Tab }) {
+  switch (tab) {
+    case 'memories':
+      return (
+        <div>
+          <MemoryFiltersSkeleton />
+          <MemoryGridSkeleton count={6} />
+        </div>
+      );
+    case 'members':
+      return <TableSkeleton rows={4} />;
+    case 'audit':
+      return <AuditListSkeleton />;
+    case 'scopes':
+      return (
+        <div className="flex flex-col gap-2.5" aria-hidden>
+          {Array.from({ length: 3 }, (_, i) => (
+            <Skeleton key={i} className="h-14 rounded-xl" />
+          ))}
+        </div>
+      );
+    case 'settings':
+      return <Skeleton className="h-72 max-w-120 rounded-xl" aria-hidden />;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -278,7 +323,21 @@ function MembersTab({
   };
 
   if (!members && error) return <RequestErrorState error={error} onRetry={() => mutateMembers()} />;
-  if (!members) return <PageLoading />;
+  if (!members) {
+    return (
+      <div>
+        {isAdmin && (
+          <div className="mb-3.5 flex justify-end">
+            <Button disabled>
+              <PlusIcon data-icon="inline-start" />
+              Add member
+            </Button>
+          </div>
+        )}
+        <TableSkeleton rows={4} />
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -674,7 +733,14 @@ function ScopeMembers({ scopeId }: { scopeId: string }) {
           title="Could not load scope members"
         />
       ) : members == null ? (
-        <Spinner />
+        <div aria-hidden>
+          <div className="flex h-8 items-center">
+            <Skeleton className="h-3.5 w-64 max-w-full" />
+          </div>
+          <div className="flex h-8 items-center">
+            <Skeleton className="h-3.5 w-52 max-w-full" />
+          </div>
+        </div>
       ) : (
         <>
           {members.length === 0 && <div className="text-xs text-muted-foreground">No members yet.</div>}

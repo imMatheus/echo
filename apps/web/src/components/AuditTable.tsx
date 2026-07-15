@@ -7,9 +7,9 @@ import { useAudit } from '@/hooks';
 import { SourceChip } from './Badge';
 import { CopyButton } from './CodeBlock';
 import { EmptyState } from './EmptyState';
-import { PageLoading } from './PageLoading';
 import { Pagination } from './Pagination';
 import { RequestErrorState } from './RequestErrorState';
+import { AuditListSkeleton } from './Skeletons';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -92,8 +92,9 @@ export function AuditTable({
     return out;
   }, [entries]);
 
-  if (entries === null && isLoading) return <PageLoading />;
-  if (entries === null && error) return <RequestErrorState error={error} onRetry={() => mutate()} />;
+  if (entries === null && !isLoading && error) {
+    return <RequestErrorState error={error} onRetry={() => mutate()} />;
+  }
 
   const filtered = Boolean(filter);
 
@@ -145,7 +146,9 @@ export function AuditTable({
         )}
       </div>
 
-      {entries && entries.length === 0 ? (
+      {entries === null ? (
+        <AuditListSkeleton />
+      ) : entries.length === 0 ? (
         <EmptyState
           icon={<ScrollTextIcon />}
           title={filtered ? 'No matching events' : 'No activity yet'}

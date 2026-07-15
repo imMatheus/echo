@@ -10,9 +10,9 @@ import { keys, useOrgs } from '@/hooks'
 import { RoleBadge } from '@/components/Badge'
 import { EmptyState } from '@/components/EmptyState'
 import { PageHeader } from '@/components/PageHeader'
-import { PageLoading } from '@/components/PageLoading'
 import { PreviewCard } from '@/components/PreviewCard'
 import { RequestErrorState } from '@/components/RequestErrorState'
+import { PreviewCardSkeleton } from '@/components/Skeletons'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import {
@@ -50,7 +50,14 @@ export default function OrgsPage() {
       {!orgs && error ? (
         <RequestErrorState error={error} onRetry={() => mutate()} />
       ) : !orgs ? (
-        <PageLoading />
+        <div
+          className="grid grid-cols-1 gap-1.5 sm:grid-cols-[repeat(auto-fill,minmax(245px,1fr))]"
+          aria-hidden
+        >
+          {Array.from({ length: 3 }, (_, i) => (
+            <PreviewCardSkeleton key={i} />
+          ))}
+        </div>
       ) : orgs.length === 0 ? (
         <EmptyState
           icon={<Building2Icon />}

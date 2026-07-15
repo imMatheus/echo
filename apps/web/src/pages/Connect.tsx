@@ -22,9 +22,9 @@ import { CodeBlock } from '@/components/CodeBlock';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { EmptyState } from '@/components/EmptyState';
 import { PageHeader } from '@/components/PageHeader';
-import { PageLoading } from '@/components/PageLoading';
 import { RelativeTime } from '@/components/RelativeTime';
 import { RequestErrorState } from '@/components/RequestErrorState';
+import { TableSkeleton } from '@/components/Skeletons';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -443,7 +443,7 @@ export default function ConnectPage() {
           {!keys && error ? (
             <RequestErrorState error={error} onRetry={() => mutate()} />
           ) : !keys ? (
-            <PageLoading />
+            <TableSkeleton rows={3} />
           ) : keys.length === 0 ? (
             <EmptyState
               icon={<KeyRoundIcon />}

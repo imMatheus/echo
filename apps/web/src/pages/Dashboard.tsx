@@ -17,10 +17,10 @@ import * as api from '../api'
 import { SourceChip } from '../components/Badge'
 import { ChartEmpty } from '../components/ChartEmpty'
 import { PageHeader } from '../components/PageHeader'
-import { PageLoading } from '../components/PageLoading'
 import { PreviewCard } from '../components/PreviewCard'
 import { RelativeTime } from '../components/RelativeTime'
 import { RequestErrorState } from '../components/RequestErrorState'
+import { ChartCardSkeleton, PreviewCardSkeleton } from '../components/Skeletons'
 import {
   Card,
   CardAction,
@@ -37,6 +37,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from '@/components/ui/chart'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAudit, useStats } from '@/hooks'
 import {
@@ -402,8 +403,20 @@ function RecentActivity() {
         </CardAction>
       </CardHeader>
       <CardContent className="pt-1">
-        {/* Empty state only once the fetch has settled — no flash while loading. */}
-        {data && entries.length === 0 ? (
+        {!data ? (
+          <ul aria-hidden>
+            {Array.from({ length: 8 }, (_, i) => (
+              <li
+                key={i}
+                className="flex items-center gap-2.5 border-b py-1.5 last:border-0"
+              >
+                <Skeleton className="size-6 shrink-0 rounded-md" />
+                <Skeleton className="h-3.5 w-40 max-w-full" />
+                <Skeleton className="ml-auto h-3 w-12 shrink-0" />
+              </li>
+            ))}
+          </ul>
+        ) : entries.length === 0 ? (
           <div className="flex h-60 flex-col items-center justify-center gap-2 text-xs text-muted-foreground">
             <ScrollTextIcon className="size-4" />
             No activity yet.
@@ -440,17 +453,11 @@ function RecentActivity() {
   )
 }
 
-export default function HomePage() {
+export default function DashboardPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const rawRange = searchParams.get('range')
   const range = isStatsRange(rawRange) ? rawRange : '24h'
-  const {
-    data: stats,
-    error,
-    isLoading,
-    isValidating,
-    mutate,
-  } = useStats(range)
+  const { data: stats, error, isValidating, mutate } = useStats(range)
 
   const activeMemoriesAdded = useMemo(
     () =>
@@ -463,17 +470,12 @@ export default function HomePage() {
     [stats],
   )
 
-  if (!stats && isLoading) return <PageLoading />
-  if (!stats && error)
-    return <RequestErrorState error={error} onRetry={() => mutate()} />
-  if (!stats) return null
-
-  const hint = RANGE_HINTS[stats.range]
+  const hint = RANGE_HINTS[range]
 
   return (
     <div>
       <PageHeader
-        title="Home"
+        title="Dashboard"
         subtitle="Your active memories and recorded Echo activity at a glance."
         actions={
           <Tabs
@@ -492,36 +494,65 @@ export default function HomePage() {
           </Tabs>
         }
       />
-      <div
-        className={cn(
-          'space-y-4 transition-opacity',
-          isValidating && 'opacity-60',
-        )}
-      >
-        {/* dqnamo-style tray: tinted bordered shell with concentric inner cards. */}
-        <div className="grid gap-1.5 rounded-[16px] border border-grayscale-3 bg-grayscale-2 p-1.5 sm:grid-cols-3">
-          <StatTile
-            label="Total memories"
-            value={stats.totalMemories}
-            hint="All time, every scope you can see"
-          />
-          <StatTile
-            label="Active memories added"
-            value={activeMemoriesAdded}
-            hint={hint}
-          />
-          <StatTile
-            label="Recorded activity"
-            value={recordedActivity}
-            hint={hint}
-          />
+      {!stats && error ? (
+        <RequestErrorState error={error} onRetry={() => mutate()} />
+      ) : !stats ? (
+        <DashboardSkeleton />
+      ) : (
+        <div
+          className={cn(
+            'space-y-4 transition-opacity',
+            isValidating && 'opacity-60',
+          )}
+        >
+          {/* dqnamo-style tray: tinted bordered shell with concentric inner cards. */}
+          <div className="grid gap-1.5 rounded-[16px] border border-grayscale-3 bg-grayscale-2 p-1.5 sm:grid-cols-3">
+            <StatTile
+              label="Total memories"
+              value={stats.totalMemories}
+              hint="All time, every scope you can see"
+            />
+            <StatTile
+              label="Active memories added"
+              value={activeMemoriesAdded}
+              hint={hint}
+            />
+            <StatTile
+              label="Recorded activity"
+              value={recordedActivity}
+              hint={hint}
+            />
+          </div>
+
+          <div className="grid gap-2 rounded-[16px] border border-grayscale-3 bg-grayscale-2 p-1.5">
+            <MemoriesChart stats={stats} />
+            <ActivityChart stats={stats} />
+          </div>
+
+          <div className="grid gap-1.5 rounded-[16px] border border-grayscale-3 bg-grayscale-2 p-1.5 lg:grid-cols-2">
+            <SourceAppsChart stats={stats} />
+            <RecentActivity />
+          </div>
         </div>
-        <MemoriesChart stats={stats} />
-        <ActivityChart stats={stats} />
-        <div className="grid gap-1.5 rounded-[16px] border border-grayscale-3 bg-grayscale-2 p-1.5 lg:grid-cols-2">
-          <SourceAppsChart stats={stats} />
-          <RecentActivity />
-        </div>
+      )}
+    </div>
+  )
+}
+
+/** Loading stand-in for the dashboard body: stat tray, charts, bottom tray. */
+function DashboardSkeleton() {
+  return (
+    <div className="space-y-4" aria-hidden>
+      <div className="grid gap-1.5 rounded-[16px] border border-grayscale-3 bg-grayscale-2 p-1.5 sm:grid-cols-3">
+        {Array.from({ length: 3 }, (_, i) => (
+          <PreviewCardSkeleton key={i} />
+        ))}
+      </div>
+      <ChartCardSkeleton />
+      <ChartCardSkeleton />
+      <div className="grid gap-1.5 rounded-[16px] border border-grayscale-3 bg-grayscale-2 p-1.5 lg:grid-cols-2">
+        <ChartCardSkeleton height="h-72" />
+        <ChartCardSkeleton height="h-72" />
       </div>
     </div>
   )
