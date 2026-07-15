@@ -2,6 +2,7 @@ services:
   db:
     image: pgvector/pgvector:pg16
     restart: unless-stopped
+    stop_grace_period: 1m
     environment:
       POSTGRES_USER: echo
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-echo}
@@ -13,14 +14,23 @@ services:
       interval: 5s
       timeout: 5s
       retries: 12
+      start_period: 10s
 
   app:
-    build: .
+    build:
+      context: .
+      target: runtime
     restart: unless-stopped
+    init: true
+    stop_grace_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     ports:
       - "${BIND_ADDRESS:-127.0.0.1}:${PORT:-3246}:3246"
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgres://echo:echo@db:5432/echo}
+      DATABASE_URL: ${ECHO_DATABASE_URL:-postgres://echo:echo@db:5432/echo}
       APP_URL: ${APP_URL:-}
       DISABLE_SIGNUP: ${DISABLE_SIGNUP:-false}
       SESSION_TTL_DAYS: ${SESSION_TTL_DAYS:-30}
@@ -36,7 +46,7 @@ services:
       db:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3246/api/v1/health || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3246/api/v1/health || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5

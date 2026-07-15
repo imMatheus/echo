@@ -3,14 +3,21 @@
 services:
   db:
     image: pgvector/pgvector:pg16
+    restart: unless-stopped
     ports:
-      - "127.0.0.1:5433:5432"
+      - "127.0.0.1:${DEV_DB_PORT:-5433}:5432"
     environment:
       POSTGRES_USER: echo
       POSTGRES_PASSWORD: echo
       POSTGRES_DB: echo
     volumes:
       - echo-db-dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U echo -d echo"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
 
 volumes:
   echo-db-dev:

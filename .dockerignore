@@ -3,12 +3,17 @@ node_modules
 **/dist
 **/coverage
 .git
+.github
+.agents
 **/.env
 **/.env.*
 !**/.env.example
 .mcp.json
 **/.mcp.json
 .claude
+docs
+scripts
+docker-compose*.yml
 *.log
 *.tgz
 .DS_Store
