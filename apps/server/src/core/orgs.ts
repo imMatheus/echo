@@ -1,6 +1,6 @@
 import type { Organization, OrganizationWithRole, OrgMember, OrgRole, OrgScopeType, ScopeMember } from '@echo/shared';
 import { slugify } from '@echo/shared';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { orgMembers, organizations, scopeMembers, scopes, users } from '@/db/schema';
 import { badRequest, conflict, forbidden, notFound } from '@/lib/http-error';
 import { isUniqueViolation } from '@/lib/postgres';
@@ -176,7 +176,11 @@ export async function addOrgMember(
       throw forbidden('Your role in this organization does not allow that');
     }
     if (role === 'owner' && actor.role !== 'owner') throw forbidden('Only an owner can add another owner');
-    const [user] = await tx.select().from(users).where(eq(users.email, email)).limit(1);
+    const [user] = await tx
+      .select({ id: users.id, email: users.email, name: users.name })
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1);
     if (!user) throw notFound(`No Echo account exists for ${email} — they need to sign up first`);
     const inserted = await tx
       .insert(orgMembers)
@@ -323,13 +327,7 @@ export async function removeOrgMember(
       .where(and(eq(orgMembers.orgId, orgId), eq(orgMembers.userId, targetUserId)))
       .returning({ userId: orgMembers.userId });
     if (!removed.length) throw notFound('That user is not a member of this organization');
-    // Also drop them from every scope inside the org in the same transaction.
-    await tx.delete(scopeMembers).where(
-      and(
-        eq(scopeMembers.userId, targetUserId),
-        inArray(scopeMembers.scopeId, tx.select({ id: scopes.id }).from(scopes).where(eq(scopes.orgId, orgId))),
-      ),
-    );
+    // The composite scope-membership FK cascades every org-scoped membership.
   });
   await logAudit(app, {
     action: leavingSelf ? 'org.member_leave' : 'org.member_remove',
@@ -366,7 +364,7 @@ export async function createOrgScope(
       .insert(scopes)
       .values({ type: input.type, name: input.name, orgId: input.orgId })
       .returning({ id: scopes.id });
-    await tx.insert(scopeMembers).values({ scopeId: created.id, userId: ctx.userId });
+    await tx.insert(scopeMembers).values({ scopeId: created.id, userId: ctx.userId, orgId: input.orgId });
     return created.id;
   });
   await logAudit(app, {
@@ -381,12 +379,18 @@ export async function createOrgScope(
   return { id: scopeId };
 }
 
-interface OrgScope {
+interface OrgScope extends Record<string, unknown> {
   id: string;
   type: string;
   name: string;
   orgId: string;
 }
+
+const lockOrgScopeQuery = (scopeId: string, orgId: string) => sql`
+  SELECT id, type, name, org_id AS "orgId"
+  FROM scopes
+  WHERE id = ${scopeId} AND org_id = ${orgId}
+  FOR UPDATE`;
 
 async function getOrgScopeOrThrow(app: AppContext, scopeId: string): Promise<OrgScope> {
   const [row] = await app.db
@@ -400,8 +404,11 @@ async function getOrgScopeOrThrow(app: AppContext, scopeId: string): Promise<Org
 
 export async function deleteOrgScope(app: AppContext, ctx: AuthContext, scopeId: string): Promise<void> {
   const scope = await getOrgScopeOrThrow(app, scopeId);
-  await app.db.transaction(async (tx) => {
+  const deletedScope = await app.db.transaction(async (tx) => {
     await tx.execute(sql`SELECT id FROM organizations WHERE id = ${scope.orgId} FOR UPDATE`);
+    const locked = await tx.execute<OrgScope>(lockOrgScopeQuery(scopeId, scope.orgId));
+    const currentScope = locked.rows[0];
+    if (!currentScope) throw notFound('Scope not found');
     const [actor] = await tx
       .select({ role: orgMembers.role })
       .from(orgMembers)
@@ -413,18 +420,19 @@ export async function deleteOrgScope(app: AppContext, ctx: AuthContext, scopeId:
     }
     // Check the special type only after authorization to avoid a cross-org
     // existence/type oracle for callers who happen to know a scope UUID.
-    if (scope.type === 'organization') throw badRequest('The organization scope cannot be deleted');
+    if (currentScope.type === 'organization') throw badRequest('The organization scope cannot be deleted');
     const deleted = await tx.delete(scopes).where(eq(scopes.id, scopeId)).returning({ id: scopes.id });
     if (!deleted.length) throw notFound('Scope not found');
+    return currentScope;
   }); // memories cascade
   await logAudit(app, {
     action: 'scope.delete',
     actorUserId: ctx.userId,
     apiKeyId: ctx.apiKeyId,
     sourceApp: ctx.sourceApp,
-    orgId: scope.orgId,
+    orgId: deletedScope.orgId,
     scopeId,
-    details: { name: scope.name, type: scope.type },
+    details: { name: deletedScope.name, type: deletedScope.type },
   });
 }
 
@@ -464,6 +472,9 @@ export async function addScopeMember(app: AppContext, ctx: AuthContext, scopeId:
   const scope = await getOrgScopeOrThrow(app, scopeId);
   const result = await app.db.transaction(async (tx) => {
     await tx.execute(sql`SELECT id FROM organizations WHERE id = ${scope.orgId} FOR UPDATE`);
+    const locked = await tx.execute<OrgScope>(lockOrgScopeQuery(scopeId, scope.orgId));
+    const currentScope = locked.rows[0];
+    if (!currentScope) throw notFound('Scope not found');
     const [actor] = await tx
       .select({ role: orgMembers.role })
       .from(orgMembers)
@@ -473,8 +484,14 @@ export async function addScopeMember(app: AppContext, ctx: AuthContext, scopeId:
     if (actor.role !== 'owner' && actor.role !== 'admin') {
       throw forbidden('Your role in this organization does not allow that');
     }
-    if (scope.type === 'organization') throw badRequest('Organization scope membership is the org member list');
-    const [user] = await tx.select().from(users).where(eq(users.email, email)).limit(1);
+    if (currentScope.type === 'organization') {
+      throw badRequest('Organization scope membership is the org member list');
+    }
+    const [user] = await tx
+      .select({ id: users.id, email: users.email, name: users.name })
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1);
     if (!user) throw notFound(`No Echo account exists for ${email}`);
     const [membership] = await tx
       .select({ role: orgMembers.role })
@@ -484,7 +501,7 @@ export async function addScopeMember(app: AppContext, ctx: AuthContext, scopeId:
     if (!membership) throw badRequest('That user must be a member of the organization first');
     const inserted = await tx
       .insert(scopeMembers)
-      .values({ scopeId, userId: user.id })
+      .values({ scopeId, userId: user.id, orgId: currentScope.orgId })
       .onConflictDoNothing()
       .returning({ createdAt: scopeMembers.createdAt });
     if (!inserted.length) throw conflict('That user is already a member of this scope');
@@ -511,6 +528,9 @@ export async function removeScopeMember(app: AppContext, ctx: AuthContext, scope
   const scope = await getOrgScopeOrThrow(app, scopeId);
   await app.db.transaction(async (tx) => {
     await tx.execute(sql`SELECT id FROM organizations WHERE id = ${scope.orgId} FOR UPDATE`);
+    const locked = await tx.execute<OrgScope>(lockOrgScopeQuery(scopeId, scope.orgId));
+    const currentScope = locked.rows[0];
+    if (!currentScope) throw notFound('Scope not found');
     const [actor] = await tx
       .select({ role: orgMembers.role })
       .from(orgMembers)
@@ -520,7 +540,9 @@ export async function removeScopeMember(app: AppContext, ctx: AuthContext, scope
     if (actor.role !== 'owner' && actor.role !== 'admin') {
       throw forbidden('Your role in this organization does not allow that');
     }
-    if (scope.type === 'organization') throw badRequest('Organization scope membership is the org member list');
+    if (currentScope.type === 'organization') {
+      throw badRequest('Organization scope membership is the org member list');
+    }
     const removed = await tx
       .delete(scopeMembers)
       .where(and(eq(scopeMembers.scopeId, scopeId), eq(scopeMembers.userId, targetUserId)))

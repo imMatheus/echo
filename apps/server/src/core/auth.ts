@@ -82,7 +82,11 @@ export async function destroySession(app: AppContext, token: string): Promise<vo
 }
 
 export async function getUserById(app: AppContext, userId: string): Promise<User> {
-  const [row] = await app.db.select().from(users).where(eq(users.id, userId)).limit(1);
+  const [row] = await app.db
+    .select({ id: users.id, email: users.email, name: users.name, createdAt: users.createdAt })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
   if (!row) throw unauthorized('Account no longer exists');
   return mapUser(row);
 }

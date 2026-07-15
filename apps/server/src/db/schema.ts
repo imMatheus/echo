@@ -3,13 +3,16 @@ import {
   bigint,
   check,
   customType,
+  foreignKey,
   index,
+  integer,
   jsonb,
   pgTable,
   primaryKey,
   real,
   text,
   timestamp,
+  unique,
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
@@ -106,6 +109,7 @@ export const scopes = pgTable(
   (t) => [
     uniqueIndex('scopes_personal_unique').on(t.userId).where(sql`type = 'personal'`),
     uniqueIndex('scopes_org_unique').on(t.orgId).where(sql`type = 'organization'`),
+    unique('scopes_id_org_id_unique').on(t.id, t.orgId),
     index('scopes_org_idx').on(t.orgId),
     check('scopes_type_check', sql`${t.type} IN ('personal', 'organization', 'workspace', 'team', 'project')`),
     check(
@@ -118,17 +122,25 @@ export const scopes = pgTable(
 export const scopeMembers = pgTable(
   'scope_members',
   {
-    scopeId: uuid('scope_id')
-      .notNull()
-      .references(() => scopes.id, { onDelete: 'cascade' }),
-    userId: uuid('user_id')
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
+    scopeId: uuid('scope_id').notNull(),
+    userId: uuid('user_id').notNull(),
+    orgId: uuid('org_id').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
     primaryKey({ columns: [t.scopeId, t.userId] }),
     index('scope_members_user_idx').on(t.userId),
+    index('scope_members_org_user_idx').on(t.orgId, t.userId),
+    foreignKey({
+      columns: [t.scopeId, t.orgId],
+      foreignColumns: [scopes.id, scopes.orgId],
+      name: 'scope_members_scope_org_fk',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [t.orgId, t.userId],
+      foreignColumns: [orgMembers.orgId, orgMembers.userId],
+      name: 'scope_members_org_member_fk',
+    }).onDelete('cascade'),
   ],
 );
 
@@ -168,7 +180,8 @@ export const memories = pgTable(
     apiKeyId: uuid('api_key_id').references(() => apiKeys.id, { onDelete: 'set null' }),
     embedding: vector('embedding'),
     embeddingModel: text('embedding_model'),
-    tsv: tsvector('tsv'),
+    embeddingDimensions: integer('embedding_dimensions').generatedAlwaysAs(sql`vector_dims(embedding)`),
+    tsv: tsvector('tsv').notNull().default(sql`to_tsvector('english', '')`),
     expiresAt: timestamp('expires_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
@@ -190,6 +203,7 @@ export const memories = pgTable(
     check('memories_kind_check', sql`${t.kind} IN ('explicit', 'inferred')`),
     check('memories_confidence_check', sql`${t.confidence} >= 0 AND ${t.confidence} <= 1`),
     check('memories_sensitivity_check', sql`${t.sensitivity} IN ('low', 'normal', 'high')`),
+    check('memories_embedding_pair_check', sql`(${t.embedding} IS NULL) = (${t.embeddingModel} IS NULL)`),
   ],
 );
 

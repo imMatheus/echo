@@ -44,6 +44,10 @@ jobs:
         run: bun run build
       - name: Build production container
         run: docker build --tag echo-ci:${{ github.sha }} .
+      - name: Schema upgrade smoke test
+        env:
+          DATABASE_URL: postgres://echo:echo@127.0.0.1:5433/echo
+        run: bun apps/server/test/schema-upgrade-smoke.ts
       - name: End-to-end smoke test
         env:
           DATABASE_URL: postgres://echo:echo@127.0.0.1:5433/echo
@@ -90,6 +94,7 @@ jobs:
             exit 1
           fi
 
+          bun apps/server/test/schema-smoke.ts
           node scripts/smoke.mjs
       - name: Hybrid search and revocation-race smoke test
         env:

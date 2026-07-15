@@ -67,13 +67,6 @@ export const LEGACY_INDEXES = [
   'memories_created_idx',
 ] as const;
 
-const WRITE_GUARD_TRIGGERS = [
-  'memories_tsv_trigger',
-  'echo_api_keys_normalize_trigger',
-  'echo_audit_preview_scrub_trigger',
-  'echo_legacy_memory_hard_delete_trigger',
-] as const;
-
 const DELETE_SOFT_DELETED = `
   WITH batch AS MATERIALIZED (
     SELECT id FROM "public"."memories"
@@ -229,19 +222,47 @@ async function normalizeMemoryTags(client: PoolClient, log: (message: string) =>
  * explicit forget after the cleanup cursor has passed. Database triggers make
  * those writes conform until every replica is on the new code.
  */
-async function ensureLegacyWriteGuards(client: PoolClient, log: (message: string) => void): Promise<void> {
-  const existing = await client.query<{ count: number }>(
-    `SELECT count(*)::int AS count
+async function triggerIsCurrent(
+  client: PoolClient,
+  name: string,
+  table: string,
+  functionName: string,
+  triggerType: number,
+  updateColumns: readonly string[],
+): Promise<boolean> {
+  const result = await client.query(
+    `SELECT 1
      FROM pg_catalog.pg_trigger AS t
      JOIN pg_catalog.pg_class AS c ON c.oid = t.tgrelid
      JOIN pg_catalog.pg_namespace AS n ON n.oid = c.relnamespace
+     JOIN pg_catalog.pg_proc AS p ON p.oid = t.tgfoid
+     JOIN pg_catalog.pg_namespace AS pn ON pn.oid = p.pronamespace
      WHERE n.nspname = 'public'
-       AND t.tgname = ANY($1::text[])
-       AND t.tgenabled <> 'D'
+       AND pn.nspname = 'public'
+       AND t.tgname = $1
+       AND c.relname = $2
+       AND p.proname = $3
+       AND t.tgtype = $4
+       AND t.tgenabled = 'O'
+       AND t.tgqual IS NULL
+       AND ARRAY(
+         SELECT a.attname::text
+         FROM unnest(t.tgattr::smallint[]) AS trigger_column(attnum)
+         JOIN pg_catalog.pg_attribute AS a
+           ON a.attrelid = t.tgrelid AND a.attnum = trigger_column.attnum
+         ORDER BY a.attname
+       ) = ARRAY(
+         SELECT expected.column_name
+         FROM unnest($5::text[]) AS expected(column_name)
+         ORDER BY expected.column_name
+       )
        AND NOT t.tgisinternal`,
-    [WRITE_GUARD_TRIGGERS],
+    [name, table, functionName, triggerType, [...updateColumns]],
   );
-  if (Number(existing.rows[0]?.count ?? 0) === WRITE_GUARD_TRIGGERS.length) return;
+  return result.rows.length === 1;
+}
+
+async function ensureLegacyWriteGuards(client: PoolClient, log: (message: string) => void): Promise<void> {
 
   // Publish the function/trigger set atomically. In particular, never expose a
   // gap between dropping the old tsv trigger and installing its replacement:
@@ -266,11 +287,22 @@ async function ensureLegacyWriteGuards(client: PoolClient, log: (message: string
       RETURN NEW;
     END
     $$ LANGUAGE plpgsql`);
-    await client.query(`DROP TRIGGER IF EXISTS "memories_tsv_trigger" ON "public"."memories"`);
-    await client.query(`
-    CREATE TRIGGER "memories_tsv_trigger"
-    BEFORE INSERT OR UPDATE OF content, tags, source_app ON "public"."memories"
-    FOR EACH ROW EXECUTE FUNCTION "public"."memories_tsv_update"()`);
+    if (
+      !(await triggerIsCurrent(
+        client,
+        'memories_tsv_trigger',
+        'memories',
+        'memories_tsv_update',
+        23,
+        ['content', 'tags', 'source_app'],
+      ))
+    ) {
+      await client.query(`DROP TRIGGER IF EXISTS "memories_tsv_trigger" ON "public"."memories"`);
+      await client.query(`
+      CREATE TRIGGER "memories_tsv_trigger"
+      BEFORE INSERT OR UPDATE OF content, tags, source_app ON "public"."memories"
+      FOR EACH ROW EXECUTE FUNCTION "public"."memories_tsv_update"()`);
+    }
 
     await client.query(`
     CREATE OR REPLACE FUNCTION "public"."echo_api_key_normalize"() RETURNS trigger AS $$
@@ -279,11 +311,22 @@ async function ensureLegacyWriteGuards(client: PoolClient, log: (message: string
       RETURN NEW;
     END
     $$ LANGUAGE plpgsql`);
-    await client.query(`DROP TRIGGER IF EXISTS "echo_api_keys_normalize_trigger" ON "public"."api_keys"`);
-    await client.query(`
-    CREATE TRIGGER "echo_api_keys_normalize_trigger"
-    BEFORE INSERT OR UPDATE OF source_app ON "public"."api_keys"
-    FOR EACH ROW EXECUTE FUNCTION "public"."echo_api_key_normalize"()`);
+    if (
+      !(await triggerIsCurrent(
+        client,
+        'echo_api_keys_normalize_trigger',
+        'api_keys',
+        'echo_api_key_normalize',
+        23,
+        ['source_app'],
+      ))
+    ) {
+      await client.query(`DROP TRIGGER IF EXISTS "echo_api_keys_normalize_trigger" ON "public"."api_keys"`);
+      await client.query(`
+      CREATE TRIGGER "echo_api_keys_normalize_trigger"
+      BEFORE INSERT OR UPDATE OF source_app ON "public"."api_keys"
+      FOR EACH ROW EXECUTE FUNCTION "public"."echo_api_key_normalize"()`);
+    }
 
     await client.query(`
     CREATE OR REPLACE FUNCTION "public"."echo_audit_preview_scrub"() RETURNS trigger AS $$
@@ -292,11 +335,22 @@ async function ensureLegacyWriteGuards(client: PoolClient, log: (message: string
       RETURN NEW;
     END
     $$ LANGUAGE plpgsql`);
-    await client.query(`DROP TRIGGER IF EXISTS "echo_audit_preview_scrub_trigger" ON "public"."audit_logs"`);
-    await client.query(`
-    CREATE TRIGGER "echo_audit_preview_scrub_trigger"
-    BEFORE INSERT OR UPDATE OF details ON "public"."audit_logs"
-    FOR EACH ROW EXECUTE FUNCTION "public"."echo_audit_preview_scrub"()`);
+    if (
+      !(await triggerIsCurrent(
+        client,
+        'echo_audit_preview_scrub_trigger',
+        'audit_logs',
+        'echo_audit_preview_scrub',
+        23,
+        ['details'],
+      ))
+    ) {
+      await client.query(`DROP TRIGGER IF EXISTS "echo_audit_preview_scrub_trigger" ON "public"."audit_logs"`);
+      await client.query(`
+      CREATE TRIGGER "echo_audit_preview_scrub_trigger"
+      BEFORE INSERT OR UPDATE OF details ON "public"."audit_logs"
+      FOR EACH ROW EXECUTE FUNCTION "public"."echo_audit_preview_scrub"()`);
+    }
 
     await client.query(`
     CREATE OR REPLACE FUNCTION "public"."echo_legacy_memory_hard_delete"() RETURNS trigger AS $$
@@ -309,11 +363,22 @@ async function ensureLegacyWriteGuards(client: PoolClient, log: (message: string
       RETURN NULL;
     END
     $$ LANGUAGE plpgsql`);
-    await client.query(`DROP TRIGGER IF EXISTS "echo_legacy_memory_hard_delete_trigger" ON "public"."memories"`);
-    await client.query(`
-    CREATE TRIGGER "echo_legacy_memory_hard_delete_trigger"
-    AFTER UPDATE OF deleted_at ON "public"."memories"
-    FOR EACH ROW EXECUTE FUNCTION "public"."echo_legacy_memory_hard_delete"()`);
+    if (
+      !(await triggerIsCurrent(
+        client,
+        'echo_legacy_memory_hard_delete_trigger',
+        'memories',
+        'echo_legacy_memory_hard_delete',
+        17,
+        ['deleted_at'],
+      ))
+    ) {
+      await client.query(`DROP TRIGGER IF EXISTS "echo_legacy_memory_hard_delete_trigger" ON "public"."memories"`);
+      await client.query(`
+      CREATE TRIGGER "echo_legacy_memory_hard_delete_trigger"
+      AFTER UPDATE OF deleted_at ON "public"."memories"
+      FOR EACH ROW EXECUTE FUNCTION "public"."echo_legacy_memory_hard_delete"()`);
+    }
 
     await client.query('COMMIT');
   } catch (error) {

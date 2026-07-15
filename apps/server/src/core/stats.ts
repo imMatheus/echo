@@ -1,7 +1,7 @@
 import type { StatsRange, UsageStats } from '@echo/shared';
-import { and, count, desc, eq, gt, gte, inArray, isNull, or, sql } from 'drizzle-orm';
+import { and, count, desc, eq, gt, gte, isNull, or, sql } from 'drizzle-orm';
 import type { PgColumn } from 'drizzle-orm/pg-core';
-import { getAccessibleScopes } from '@/core/access';
+import { accessibleScopeIdsQuery } from '@/core/access';
 import { notOrgReadFanout } from '@/core/audit';
 import { auditLogs, memories } from '@/db/schema';
 import type { AppContext } from '@/types';
@@ -53,34 +53,27 @@ export async function getUsageStats(app: AppContext, userId: string, range: Stat
   const buckets = listBuckets(granularity, bucketCount);
   const since = new Date(granularity === 'hour' ? buckets[0] : `${buckets[0]}T00:00:00Z`);
 
-  const scopes = await getAccessibleScopes(app, userId);
-  const scopeIds = scopes.map((s) => s.id);
-  const totalMemories = scopes.reduce((sum, s) => sum + s.memoryCount, 0);
-
   const memoryBucket = bucketExpr(memories.createdAt, granularity);
   const auditBucket = bucketExpr(auditLogs.occurredAt, granularity);
+  const activeMemory = and(
+    sql`${memories.scopeId} IN (${accessibleScopeIdsQuery(userId)})`,
+    isNull(memories.deletedAt),
+    or(isNull(memories.expiresAt), gt(memories.expiresAt, sql`now()`)),
+  );
   const inRange = and(
     eq(auditLogs.actorUserId, userId),
     gte(auditLogs.occurredAt, since),
     notOrgReadFanout,
   );
 
-  const [memoriesOverTime, actionsOverTime, sourceApps] = await Promise.all([
-    scopeIds.length === 0
-      ? Promise.resolve([])
-      : app.db
-          .select({ bucket: memoryBucket, count: count() })
-          .from(memories)
-          .where(
-            and(
-              inArray(memories.scopeId, scopeIds),
-              isNull(memories.deletedAt),
-              or(isNull(memories.expiresAt), gt(memories.expiresAt, sql`now()`)),
-              gte(memories.createdAt, since),
-            ),
-          )
-          .groupBy(memoryBucket)
-          .orderBy(memoryBucket),
+  const [totalResult, memoriesOverTime, actionsOverTime, sourceApps] = await Promise.all([
+    app.db.select({ count: count() }).from(memories).where(activeMemory),
+    app.db
+      .select({ bucket: memoryBucket, count: count() })
+      .from(memories)
+      .where(and(activeMemory, gte(memories.createdAt, since)))
+      .groupBy(memoryBucket)
+      .orderBy(memoryBucket),
     app.db
       .select({ bucket: auditBucket, action: auditLogs.action, count: count() })
       .from(auditLogs)
@@ -99,7 +92,7 @@ export async function getUsageStats(app: AppContext, userId: string, range: Stat
     range,
     granularity,
     buckets,
-    totalMemories,
+    totalMemories: totalResult[0].count,
     memoriesOverTime,
     actionsOverTime,
     sourceApps,

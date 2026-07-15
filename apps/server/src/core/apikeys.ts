@@ -8,7 +8,22 @@ import { logAudit } from './audit';
 
 type ApiKeyRow = typeof apiKeys.$inferSelect;
 
-function mapKey(row: ApiKeyRow): ApiKeyInfo {
+type PublicApiKeyRow = Pick<
+  ApiKeyRow,
+  'id' | 'name' | 'sourceApp' | 'keyPrefix' | 'lastUsedAt' | 'createdAt' | 'revokedAt'
+>;
+
+const publicApiKeySelect = {
+  id: apiKeys.id,
+  name: apiKeys.name,
+  sourceApp: apiKeys.sourceApp,
+  keyPrefix: apiKeys.keyPrefix,
+  lastUsedAt: apiKeys.lastUsedAt,
+  createdAt: apiKeys.createdAt,
+  revokedAt: apiKeys.revokedAt,
+} as const;
+
+function mapKey(row: PublicApiKeyRow): ApiKeyInfo {
   return {
     id: row.id,
     name: row.name,
@@ -34,7 +49,7 @@ export async function createApiKey(
   const [row] = await app.db
     .insert(apiKeys)
     .values({ userId: ctx.userId, name: input.name, sourceApp, keyPrefix: prefix, keyHash: hash })
-    .returning();
+    .returning(publicApiKeySelect);
   await logAudit(app, {
     action: 'apikey.create',
     actorUserId: ctx.userId,
@@ -47,7 +62,7 @@ export async function createApiKey(
 
 export async function listApiKeys(app: AppContext, userId: string): Promise<ApiKeyInfo[]> {
   const rows = await app.db
-    .select()
+    .select(publicApiKeySelect)
     .from(apiKeys)
     .where(eq(apiKeys.userId, userId))
     .orderBy(desc(apiKeys.createdAt));

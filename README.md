@@ -110,7 +110,8 @@ Then configure the client (Node.js 20 or newer) with the absolute path to the bu
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `DATABASE_URL` | `postgres://echo:echo@db:5432/echo` in Compose | Full Postgres URL override; percent-encode reserved characters in its password component |
+| `DATABASE_URL` | `postgres://echo:echo@localhost:5433/echo` outside Compose | Database URL used when the server runs directly on the host |
+| `ECHO_DATABASE_URL` | `postgres://echo:echo@db:5432/echo` in Compose | Compose-only database URL override; percent-encode reserved characters in its password component |
 | `POSTGRES_PASSWORD` | `echo` | Raw password used by the Compose Postgres service |
 | `PORT` / `HOST` | `3246` / `0.0.0.0` | Listen address |
 | `APP_URL` | — | Public URL; https enables Secure cookies |
@@ -124,7 +125,7 @@ Then configure the client (Node.js 20 or newer) with the absolute path to the bu
 | `SESSION_TTL_DAYS` | `30` | Dashboard session lifetime |
 | `STATIC_DIR` | auto | Where the built dashboard lives |
 
-When changing the Compose password, set both variables. For example, use the raw `POSTGRES_PASSWORD=p@ss/word` for Postgres and `DATABASE_URL=postgres://echo:p%40ss%2Fword@db:5432/echo` for the app. With no overrides, Compose keeps the matching `echo` defaults.
+When changing the Compose password, set both variables. For example, use the raw `POSTGRES_PASSWORD=p@ss/word` for Postgres and `ECHO_DATABASE_URL=postgres://echo:p%40ss%2Fword@db:5432/echo` for the app. The separate name prevents a host-development `DATABASE_URL` from accidentally pointing the app container at its own loopback interface. With no overrides, Compose keeps the matching `echo` defaults.
 
 Switching embedding providers is safe at any time: memories remember which model embedded them, vector search only matches vectors from the active model, and full-text search covers the rest. Re-save a memory to re-embed it with the new provider.
 
@@ -154,9 +155,9 @@ docs/API.md         Full REST API reference
 
 - **Thin MCP layer** — MCP tools call the exact same core functions as the REST routes, so scoping rules and audit logging cannot diverge between paths.
 - **Stateless MCP endpoint** — each `POST /mcp` builds a fresh server/transport pair; no session affinity, horizontal scaling is trivial.
-- **Dimension-agnostic vectors, with a scaling tradeoff** — the `embedding` column is an untyped `vector`, so providers and dimensions can change without a schema migration. That flexibility prevents a fixed-dimension HNSW/IVFFlat index: vector ranking is currently an exact scan over accessible rows for the active model. Large deployments should move to model/dimension-specific indexed storage rather than treating this as free scalability.
+- **Dimension-agnostic vectors, with a scaling tradeoff** — the `embedding` column is an untyped `vector`, so providers and dimensions can change without a schema migration. Each row records its generated dimension, and recall only compares compatible vectors for the active model; full-text search still covers incompatible legacy rows. That flexibility prevents a fixed-dimension HNSW/IVFFlat index: vector ranking is currently an exact scan over accessible rows. Large deployments should move to model/dimension-specific indexed storage rather than treating this as free scalability.
 - **Deletion and expiry** — an explicit deletion permanently removes the memory row immediately. Expired memories vanish from queries immediately and are purged by the retention sweep after 30 days.
-- **Drizzle ORM** — the schema lives in `apps/server/src/db/schema.ts`; core queries use the Drizzle query builder, while the hybrid vector/full-text recall stays hand-written SQL run through Drizzle's `sql` executor. Migrations are generated with `bun --filter @echo/server db:generate` and applied automatically on server start. Run `bun --filter @echo/server db:migrate` for an explicit migration; this project command must be used instead of calling `drizzle-kit migrate` directly because it also runs resumable cleanup batches, rolling-deploy write guards, and PostgreSQL concurrent-index phases that cannot live inside Drizzle's transaction.
+- **Drizzle ORM** — the schema lives in `apps/server/src/db/schema.ts`; core queries use the Drizzle query builder, while the hybrid vector/full-text recall stays hand-written SQL run through Drizzle's `sql` executor. Generate migrations from the server package (`cd apps/server && bun run db:generate -- --name <slug>`) so Drizzle writes to `apps/server/drizzle`, then apply them automatically on server start or explicitly with `bun run --filter @echo/server db:migrate`. Use this project migrator instead of calling `drizzle-kit migrate` directly because it also runs resumable cleanup batches, rolling-deploy write guards, and PostgreSQL concurrent-index phases that cannot live inside Drizzle's transaction.
 
 ## Hosted vs self-hosted
 

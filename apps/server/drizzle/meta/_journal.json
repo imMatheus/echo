@@ -15,6 +15,20 @@
       "when": 1784070759891,
       "tag": "0001_lucky_earthquake",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1784089733648,
+      "tag": "0002_vector_dimensions_and_owner_guard",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1784090806462,
+      "tag": "0003_scope_membership_integrity",
+      "breakpoints": true
     }
   ]
 }

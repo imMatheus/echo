@@ -27,6 +27,11 @@ export interface ScopeAccess {
 // This query is the privacy boundary of the whole system, so it stays hand-written
 // SQL (executed through Drizzle's `sql` runner) rather than reshaped into the query
 // builder — the OR-logic and the correlated memory_count subquery must remain exact.
+const accessJoins = (userId: string): SQL => sql`
+  LEFT JOIN organizations o ON o.id = s.org_id
+  LEFT JOIN org_members om ON om.org_id = s.org_id AND om.user_id = ${userId}
+  LEFT JOIN scope_members sm ON sm.scope_id = s.id AND sm.user_id = ${userId}`;
+
 const accessSelect = (userId: string, includeMemoryCount: boolean): SQL => sql`
   SELECT s.id, s.type, s.name, s.org_id, s.user_id, s.created_at,
          o.name AS org_name,
@@ -38,14 +43,23 @@ const accessSelect = (userId: string, includeMemoryCount: boolean): SQL => sql`
                       AND (m.expires_at IS NULL OR m.expires_at > now()))`
            : sql`0::int`} AS memory_count
   FROM scopes s
-  LEFT JOIN organizations o ON o.id = s.org_id
-  LEFT JOIN org_members om ON om.org_id = s.org_id AND om.user_id = ${userId}
-  LEFT JOIN scope_members sm ON sm.scope_id = s.id AND sm.user_id = ${userId}`;
+  ${accessJoins(userId)}`;
 
 const accessWhere = (userId: string): SQL => sql`
   ((s.type = 'personal' AND s.user_id = ${userId})
    OR (om.user_id IS NOT NULL
        AND (s.type = 'organization' OR sm.user_id IS NOT NULL OR om.role IN ('owner', 'admin'))))`;
+
+/**
+ * Authorization subquery for memory reads. Keeping this predicate inside the
+ * statement that returns content prevents a membership snapshot from staying
+ * valid after a concurrent revocation (especially across a slow embedding call).
+ */
+export const accessibleScopeIdsQuery = (userId: string): SQL => sql`
+  SELECT s.id
+  FROM scopes s
+  ${accessJoins(userId)}
+  WHERE ${accessWhere(userId)}`;
 
 function mapAccess(row: any): ScopeAccess {
   const isPersonal = row.type === 'personal';

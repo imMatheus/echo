@@ -61,6 +61,22 @@ check('similarity populated', typeof s1.json?.results?.[0]?.similarity === 'numb
 const s2 = await api('POST', '/memories/search', { cookie, body: { query: 'terraform deployment approval' } });
 check('finds pipeline memory', s2.json?.results?.[0]?.content?.includes('terraform'));
 
+// Same provider/model labels can legitimately produce different dimensions
+// across endpoint configuration or model upgrades. Mismatched stored vectors
+// must be skipped by vector ranking while remaining available to full-text search.
+const shortVector = await api('POST', '/memories', {
+  cookie,
+  body: { content: '[short-vector] dimension compatibility fallback' },
+});
+check('stores alternate dimensions under the same model label', shortVector.status === 201);
+const mixedDimensionSearch = await api('POST', '/memories/search', {
+  cookie,
+  body: { query: 'dimension compatibility fallback' },
+});
+const mixedDimensionResult = mixedDimensionSearch.json?.results?.find((result) => result.id === shortVector.json?.memory?.id);
+check('mixed-dimension search succeeds', mixedDimensionSearch.status === 200, `status=${mixedDimensionSearch.status}`);
+check('mismatched vector falls back to full-text', mixedDimensionResult?.similarity === null, JSON.stringify(mixedDimensionResult));
+
 // Mutation-time authorization regression: access can be revoked while a slow
 // embedding call is in flight. The eventual write must re-check membership.
 const bobSignup = await api('POST', '/auth/signup', {
@@ -71,12 +87,39 @@ const org = await api('POST', '/orgs', { cookie, body: { name: `Vector Race ${RU
 const orgId = org.json.org.id;
 const scopeList = await api('GET', '/scopes', { cookie });
 const orgScope = scopeList.json.scopes.find((scope) => scope.orgId === orgId && scope.type === 'organization');
+const protectedMemory = await api('POST', '/memories', {
+  cookie,
+  body: { content: 'revoked search must not reveal this organization memory', scopeId: orgScope.id },
+});
 await api('POST', `/orgs/${orgId}/members`, {
   cookie,
   body: { email: `${RUN}-bob@example.com`, role: 'member' },
 });
 
 let slowBefore = await slowRequestCount();
+const pendingSearch = api('POST', '/memories/search', {
+  cookie: bobCookie,
+  body: {
+    query: '[slow-embedding] revoked search organization memory',
+    scopeIds: [orgScope.id],
+  },
+});
+await waitForSlowRequest(slowBefore);
+await api('DELETE', `/orgs/${orgId}/members/${bobSignup.json.user.id}`, { cookie });
+await releaseSlowRequests();
+const revokedSearch = await pendingSearch;
+check('revoked in-flight search completes safely', revokedSearch.status === 200, `status=${revokedSearch.status}`);
+check(
+  'revoked in-flight search returns no protected content',
+  !revokedSearch.json?.results?.some((memory) => memory.id === protectedMemory.json?.memory?.id),
+);
+
+await api('POST', `/orgs/${orgId}/members`, {
+  cookie,
+  body: { email: `${RUN}-bob@example.com`, role: 'member' },
+});
+
+slowBefore = await slowRequestCount();
 const pendingCreate = api('POST', '/memories', {
   cookie: bobCookie,
   body: { content: '[slow-embedding] revoked create must not persist', scopeId: orgScope.id },

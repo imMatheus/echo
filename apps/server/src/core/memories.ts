@@ -8,14 +8,14 @@ import type {
   SearchMemoriesResponse,
   UpdateMemoryRequest,
 } from '@echo/shared';
-import { and, count, desc, eq, inArray, isNotNull, isNull, type SQL, sql } from 'drizzle-orm';
+import { and, count, desc, eq, isNull, type SQL, sql } from 'drizzle-orm';
 import type { PgUpdateSetSource } from 'drizzle-orm/pg-core';
-import { memories, scopes, sessions, users } from '@/db/schema';
+import { memories, scopes, users } from '@/db/schema';
 import { toVectorLiteral } from '@/lib/embeddings';
 import { forbidden, notFound } from '@/lib/http-error';
 import { escapeLikePattern } from '@/lib/sql';
 import type { AppContext, AuthContext } from '@/types';
-import { getAccessibleScopes, getScopeAccess, type ScopeAccess } from './access';
+import { accessibleScopeIdsQuery, getAccessibleScopes, getScopeAccess, type ScopeAccess } from './access';
 import { type AuditEvent, logAudit, logAuditMany } from './audit';
 
 const MEMORY_COLS = `
@@ -60,9 +60,44 @@ function mapMemory(row: MemoryRow): Memory {
   };
 }
 
+const memoryMutationReturning = {
+  id: memories.id,
+  scopeId: memories.scopeId,
+  content: memories.content,
+  kind: memories.kind,
+  confidence: memories.confidence,
+  sensitivity: memories.sensitivity,
+  sourceApp: memories.sourceApp,
+  tags: memories.tags,
+  metadata: memories.metadata,
+  createdBy: memories.createdBy,
+  embeddingModel: memories.embeddingModel,
+  expiresAt: memories.expiresAt,
+  createdAt: memories.createdAt,
+  updatedAt: memories.updatedAt,
+} as const;
+
+type MutationMemoryRow = Pick<
+  typeof memories.$inferSelect,
+  | 'id'
+  | 'scopeId'
+  | 'content'
+  | 'kind'
+  | 'confidence'
+  | 'sensitivity'
+  | 'sourceApp'
+  | 'tags'
+  | 'metadata'
+  | 'createdBy'
+  | 'embeddingModel'
+  | 'expiresAt'
+  | 'createdAt'
+  | 'updatedAt'
+>;
+
 /** Build the exact response written by a mutation while its transaction locks are still held. */
 function mapMutationMemory(
-  row: typeof memories.$inferSelect,
+  row: MutationMemoryRow,
   scope: ScopeAccess,
   createdByName: string | null,
 ): Memory {
@@ -158,11 +193,14 @@ export function normalizeTags(input: string[] | undefined): string[] {
 }
 
 /** Embedding failures must never fail a write — the memory is stored without a vector. */
-async function embedBestEffort(app: AppContext, text: string): Promise<{ vector: string; model: string } | null> {
+async function embedBestEffort(
+  app: AppContext,
+  text: string,
+): Promise<{ vector: string; model: string; dimensions: number } | null> {
   if (!app.embeddings) return null;
   try {
     const [embedding] = await app.embeddings.embed([text]);
-    return { vector: toVectorLiteral(embedding), model: app.embeddings.modelId };
+    return { vector: toVectorLiteral(embedding), model: app.embeddings.modelId, dimensions: embedding.length };
   } catch (err) {
     app.log.error({ err }, 'embedding failed; storing memory without a vector');
     return null;
@@ -206,7 +244,7 @@ export async function createMemory(app: AppContext, ctx: AuthContext, input: Cre
         embeddingModel: embedded?.model ?? null,
         expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
       })
-      .returning();
+      .returning(memoryMutationReturning);
     // Returning the transaction snapshot avoids a post-commit fetch observing a
     // later move or rewrite in a scope the original caller cannot access.
     return mapMutationMemory(created, scope, ctx.userName);
@@ -215,11 +253,15 @@ export async function createMemory(app: AppContext, ctx: AuthContext, input: Cre
     action: 'memory.create',
     actorUserId: ctx.userId,
     apiKeyId: ctx.apiKeyId,
-    sourceApp: memory.sourceApp,
+    sourceApp: ctx.sourceApp,
     memoryId: memory.id,
     scopeId: scope.id,
     orgId: scope.orgId,
-    details: { kind: memory.kind, scopeType: scope.type },
+    details: {
+      kind: memory.kind,
+      scopeType: scope.type,
+      ...(memory.sourceApp !== ctx.sourceApp ? { memorySourceApp: memory.sourceApp } : {}),
+    },
   });
   return memory;
 }
@@ -273,19 +315,18 @@ export async function listMemories(
   ctx: AuthContext,
   query: ListMemoriesQuery,
 ): Promise<ListMemoriesResponse> {
-  let scopeIds: string[];
   let requestedOrgId: string | null = null;
   if (query.scopeId) {
     const scope = await getScopeAccess(app, ctx.userId, query.scopeId, false);
     if (!scope) throw notFound('Scope not found');
-    scopeIds = [scope.id];
     requestedOrgId = scope.orgId;
-  } else {
-    scopeIds = (await getAccessibleScopes(app, ctx.userId, false)).map((s) => s.id);
   }
-  if (scopeIds.length === 0) return { memories: [], total: 0 };
 
-  const conditions: SQL[] = [inArray(memories.scopeId, scopeIds), notGone()];
+  const conditions: SQL[] = [
+    sql`${memories.scopeId} IN (${accessibleScopeIdsQuery(ctx.userId)})`,
+    notGone(),
+  ];
+  if (query.scopeId) conditions.push(eq(memories.scopeId, query.scopeId));
   if (query.q) {
     conditions.push(sql`${memories.content} ILIKE ${`%${escapeLikePattern(query.q)}%`} ESCAPE E'\\\\'`);
   }
@@ -308,7 +349,7 @@ export async function listMemories(
       .innerJoin(scopes, eq(scopes.id, memories.scopeId))
       .leftJoin(users, eq(users.id, memories.createdBy))
       .where(where)
-      .orderBy(desc(memories.createdAt))
+      .orderBy(desc(memories.createdAt), desc(memories.id))
       .limit(limit)
       .offset(offset),
   ]);
@@ -366,21 +407,27 @@ export async function searchMemories(
   req: SearchMemoriesRequest,
 ): Promise<SearchMemoriesResponse> {
   const accessible = await getAccessibleScopes(app, ctx.userId, false);
-  let scopeIds = accessible.map((s) => s.id);
+  const allowedScopeIds = accessible.map((s) => s.id);
+  let requestedScopeIds: string[] | undefined;
   if (req.scopeIds && req.scopeIds.length > 0) {
-    const allowed = new Set(scopeIds);
+    const allowed = new Set(allowedScopeIds);
     const rejected = req.scopeIds.filter((id) => !allowed.has(id));
     if (rejected.length > 0) throw notFound(`Scope not found: ${rejected[0]}`);
-    scopeIds = req.scopeIds;
+    requestedScopeIds = req.scopeIds;
   }
   const limit = Math.min(Math.max(req.limit ?? 8, 1), 50);
-  if (scopeIds.length === 0 || !req.query.trim()) return { results: [], mode: app.embeddings ? 'hybrid' : 'fts' };
+  if (allowedScopeIds.length === 0 || !req.query.trim()) {
+    return { results: [], mode: app.embeddings ? 'hybrid' : 'fts' };
+  }
 
   const embedded = await embedBestEffort(app, req.query);
   let rows: MemoryRow[];
   // Bind the scope ids as a single Postgres array literal: interpolating a JS array
   // into a raw `sql` template spreads it into separate params, which breaks `= ANY(...)`.
-  const scopeArray = `{${scopeIds.join(',')}}`;
+  const scopeArray = requestedScopeIds ? `{${requestedScopeIds.join(',')}}` : null;
+  const requestedScopeFilter = scopeArray
+    ? sql`AND m.scope_id = ANY(${scopeArray}::uuid[])`
+    : sql``;
 
   // OR-semantics tsquery: recall queries are descriptions of what's needed, not
   // exact phrases, so any-term matching with rank ordering beats plainto's AND.
@@ -391,16 +438,21 @@ export async function searchMemories(
 
   if (embedded) {
     const result = await app.db.execute(
-      sql`WITH q AS (${tsq(req.query)}),
+      sql`WITH allowed_scopes AS (${accessibleScopeIdsQuery(ctx.userId)}),
+       q AS (${tsq(req.query)}),
        base AS (
-         SELECT m.id, m.embedding, m.embedding_model, m.tsv FROM memories m
-         WHERE m.scope_id = ANY(${scopeArray}::uuid[]) AND ${sql.raw(NOT_GONE)}
+         SELECT m.id, m.embedding, m.embedding_model, m.embedding_dimensions, m.tsv
+         FROM memories m
+         INNER JOIN allowed_scopes a ON a.id = m.scope_id
+         WHERE ${sql.raw(NOT_GONE)} ${requestedScopeFilter}
        ),
        vec AS (
          SELECT id, (1 - (embedding <=> ${embedded.vector}::vector))::float8 AS similarity,
                 row_number() OVER (ORDER BY embedding <=> ${embedded.vector}::vector) AS rnk
          FROM base
-         WHERE embedding IS NOT NULL AND embedding_model = ${embedded.model}
+         WHERE embedding IS NOT NULL
+           AND embedding_model = ${embedded.model}
+           AND embedding_dimensions = ${embedded.dimensions}
          ORDER BY embedding <=> ${embedded.vector}::vector
          LIMIT ${CANDIDATES}
        ),
@@ -425,11 +477,14 @@ export async function searchMemories(
     rows = result.rows as MemoryRow[];
   } else {
     const result = await app.db.execute(
-      sql`WITH q AS (${tsq(req.query)}),
+      sql`WITH allowed_scopes AS (${accessibleScopeIdsQuery(ctx.userId)}),
+       q AS (${tsq(req.query)}),
        fts AS (
          SELECT m.id, row_number() OVER (ORDER BY ts_rank_cd(m.tsv, q.tsq) DESC, m.id) AS rnk
-         FROM memories m, q
-         WHERE m.scope_id = ANY(${scopeArray}::uuid[]) AND ${sql.raw(NOT_GONE)}
+         FROM memories m
+         INNER JOIN allowed_scopes a ON a.id = m.scope_id
+         CROSS JOIN q
+         WHERE ${sql.raw(NOT_GONE)} ${requestedScopeFilter}
            AND q.tsq IS NOT NULL AND m.tsv @@ q.tsq
          ORDER BY ts_rank_cd(m.tsv, q.tsq) DESC
          LIMIT ${CANDIDATES}
@@ -557,7 +612,7 @@ export async function updateMemory(
       .update(memories)
       .set(set)
       .where(and(eq(memories.id, id), eq(memories.scopeId, memory.scopeId)))
-      .returning();
+      .returning(memoryMutationReturning);
     if (!changed) throw notFound('Memory not found');
     // Capture the row before releasing the authorization and row locks. A
     // second writer may move it immediately after commit, but cannot alter this
@@ -634,14 +689,76 @@ export async function deleteMemory(app: AppContext, ctx: AuthContext, id: string
   });
 }
 
-/** Housekeeping: soft-delete expired memories, purge soft-deleted rows after 30 days. */
+const SWEEP_BATCH_SIZE = 500;
+
+interface SweptRow extends Record<string, unknown> {
+  key: string;
+}
+
+async function runSweepBatches(app: AppContext, statement: (limit: number) => SQL): Promise<number> {
+  let total = 0;
+  while (true) {
+    const result = await app.db.execute<SweptRow>(statement(SWEEP_BATCH_SIZE));
+    total += result.rows.length;
+    if (result.rows.length < SWEEP_BATCH_SIZE) return total;
+  }
+}
+
+/**
+ * Housekeeping in short, replica-safe transactions. SKIP LOCKED lets multiple
+ * replicas share a backlog without blocking each other or updating the same row.
+ */
 export async function sweepMemories(app: AppContext): Promise<void> {
-  await app.db
-    .update(memories)
-    .set({ deletedAt: sql`now()` })
-    .where(and(isNotNull(memories.expiresAt), sql`${memories.expiresAt} <= now()`, isNull(memories.deletedAt)));
-  await app.db
-    .delete(memories)
-    .where(and(isNotNull(memories.deletedAt), sql`${memories.deletedAt} < now() - interval '30 days'`));
-  await app.db.delete(sessions).where(sql`${sessions.expiresAt} < now()`);
+  const expired = await runSweepBatches(
+    app,
+    (limit) => sql`
+      WITH batch AS MATERIALIZED (
+        SELECT id
+        FROM memories
+        WHERE expires_at IS NOT NULL AND expires_at <= now() AND deleted_at IS NULL
+        ORDER BY expires_at, id
+        LIMIT ${limit}
+        FOR UPDATE SKIP LOCKED
+      )
+      UPDATE memories AS m
+      SET deleted_at = now()
+      FROM batch
+      WHERE m.id = batch.id
+      RETURNING m.id::text AS key`,
+  );
+  const purged = await runSweepBatches(
+    app,
+    (limit) => sql`
+      WITH batch AS MATERIALIZED (
+        SELECT id
+        FROM memories
+        WHERE deleted_at < now() - interval '30 days'
+        ORDER BY deleted_at, id
+        LIMIT ${limit}
+        FOR UPDATE SKIP LOCKED
+      )
+      DELETE FROM memories AS m
+      USING batch
+      WHERE m.id = batch.id
+      RETURNING m.id::text AS key`,
+  );
+  const sessionsPurged = await runSweepBatches(
+    app,
+    (limit) => sql`
+      WITH batch AS MATERIALIZED (
+        SELECT token_hash
+        FROM sessions
+        WHERE expires_at < now()
+        ORDER BY expires_at, token_hash
+        LIMIT ${limit}
+        FOR UPDATE SKIP LOCKED
+      )
+      DELETE FROM sessions AS s
+      USING batch
+      WHERE s.token_hash = batch.token_hash
+      RETURNING s.token_hash AS key`,
+  );
+  if (expired + purged + sessionsPurged > 0) {
+    app.log.info({ expired, purged, sessionsPurged }, 'memory/session sweep complete');
+  }
 }
