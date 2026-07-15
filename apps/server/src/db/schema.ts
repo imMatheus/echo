@@ -72,7 +72,6 @@ export const sessions = pgTable(
 export const organizations = pgTable('organizations', {
   id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
   name: text('name').notNull(),
-  slug: text('slug').unique().notNull(),
   createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });

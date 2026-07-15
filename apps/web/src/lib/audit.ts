@@ -212,10 +212,8 @@ export function detailSummary(entry: AuditEntry): string | null {
     case 'auth.login':
     case 'auth.signup':
       return asString(d.email);
-    case 'org.create': {
-      const slug = asString(d.slug);
-      return joinParts([asString(d.name), slug && `/${slug}`]);
-    }
+    case 'org.create':
+      return asString(d.name);
     case 'org.update': {
       const name = asString(d.name);
       return name ? `Renamed to “${name}”` : null;

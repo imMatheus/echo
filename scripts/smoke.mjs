@@ -120,6 +120,7 @@ check('bob search finds nothing personal', bobSearch.json?.results?.length === 0
 console.log('— organizations —');
 const org = await api('POST', '/orgs', { cookie: cookieA, body: { name: `Acme ${RUN}` } });
 check('create org 201', org.status === 201, JSON.stringify(org.json));
+check('organization response has no slug', !('slug' in (org.json?.org ?? {})), JSON.stringify(org.json?.org));
 const orgId = org.json?.org?.id;
 
 const scopes1 = await api('GET', '/scopes', { cookie: cookieA });

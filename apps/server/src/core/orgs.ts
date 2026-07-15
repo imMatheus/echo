@@ -1,15 +1,13 @@
 import type { Organization, OrganizationWithRole, OrgMember, OrgRole, OrgScopeType, ScopeMember } from '@echo/shared';
-import { slugify } from '@echo/shared';
 import { and, eq, sql } from 'drizzle-orm';
 import { orgMembers, organizations, scopeMembers, scopes, users } from '@/db/schema';
 import { badRequest, conflict, forbidden, notFound } from '@/lib/http-error';
-import { isUniqueViolation } from '@/lib/postgres';
 import type { AppContext, AuthContext } from '@/types';
 import { getScopeAccess } from './access';
 import { logAudit } from './audit';
 
-function mapOrg(row: { id: string; name: string; slug: string; createdAt: Date }): Organization {
-  return { id: row.id, name: row.name, slug: row.slug, createdAt: row.createdAt.toISOString() };
+function mapOrg(row: { id: string; name: string; createdAt: Date }): Organization {
+  return { id: row.id, name: row.name, createdAt: row.createdAt.toISOString() };
 }
 
 /** The caller's role in the org, or null if not a member. */
@@ -37,33 +35,21 @@ export async function requireOrgRole(
 export async function createOrg(
   app: AppContext,
   ctx: AuthContext,
-  input: { name: string; slug?: string },
+  input: { name: string },
 ): Promise<Organization> {
-  const slug = input.slug ? slugify(input.slug) : slugify(input.name);
-  let org: typeof organizations.$inferSelect;
-  try {
-    org = await app.db.transaction(async (tx) => {
-      const [created] = await tx
-        .insert(organizations)
-        .values({ name: input.name, slug, createdBy: ctx.userId })
-        .returning();
-      await tx.insert(orgMembers).values({ orgId: created.id, userId: ctx.userId, role: 'owner' });
-      await tx.insert(scopes).values({ type: 'organization', name: input.name, orgId: created.id });
-      return created;
-    });
-  } catch (error) {
-    if (isUniqueViolation(error, 'organizations_slug_unique')) {
-      throw conflict(`Slug "${slug}" is already taken`);
-    }
-    throw error;
-  }
+  const org = await app.db.transaction(async (tx) => {
+    const [created] = await tx.insert(organizations).values({ name: input.name, createdBy: ctx.userId }).returning();
+    await tx.insert(orgMembers).values({ orgId: created.id, userId: ctx.userId, role: 'owner' });
+    await tx.insert(scopes).values({ type: 'organization', name: input.name, orgId: created.id });
+    return created;
+  });
   await logAudit(app, {
     action: 'org.create',
     actorUserId: ctx.userId,
     apiKeyId: ctx.apiKeyId,
     sourceApp: ctx.sourceApp,
     orgId: org.id,
-    details: { name: input.name, slug },
+    details: { name: input.name },
   });
   return mapOrg(org);
 }
@@ -73,7 +59,6 @@ export async function listOrgs(app: AppContext, userId: string): Promise<Organiz
     .select({
       id: organizations.id,
       name: organizations.name,
-      slug: organizations.slug,
       createdAt: organizations.createdAt,
       role: orgMembers.role,
       memberCount: sql<number>`(SELECT count(*)::int FROM org_members m2 WHERE m2.org_id = ${organizations.id})`,

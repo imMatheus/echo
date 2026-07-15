@@ -19,13 +19,6 @@ import { requireAuth } from '@/http/authn';
 
 const createSchema = z.object({
   name: z.string().trim().min(1).max(100),
-  slug: z
-    .string()
-    .trim()
-    .min(2)
-    .max(48)
-    .regex(/^[a-z0-9][a-z0-9-]*$/, 'lowercase letters, digits and dashes only')
-    .optional(),
 });
 
 const idParam = z.object({ id: z.string().uuid() });

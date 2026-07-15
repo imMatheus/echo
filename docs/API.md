@@ -56,7 +56,7 @@ Codes: `unauthorized` (401), `forbidden` (403), `not_found` (404), `validation_e
 ## Organizations
 
 - `GET /orgs` → `{ orgs: OrganizationWithRole[] }`
-- `POST /orgs` `{ name, slug? }` → `{ org }` — creator becomes `owner`; an `organization`-type scope is auto-created.
+- `POST /orgs` `{ name }` → `{ org }` — creator becomes `owner`; an `organization`-type scope is auto-created.
 - `GET /orgs/:id` → `{ org, role }`
 - `PATCH /orgs/:id` `{ name }` → `{ org }` — admin/owner.
 - `GET /orgs/:id/members` → `{ members: OrgMember[] }` — any member.

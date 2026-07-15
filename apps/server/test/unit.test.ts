@@ -1,6 +1,5 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { slugify } from '@echo/shared';
 import type { PoolClient } from 'pg';
 import { loadConfig } from '@/config';
 import { normalizeTags } from '@/core/memories';
@@ -38,18 +37,6 @@ describe('api keys', () => {
 
   it('generates unique keys', () => {
     expect(generateApiKey().secret).not.toBe(generateApiKey().secret);
-  });
-});
-
-describe('slugify', () => {
-  it('lowercases and dashes', () => {
-    expect(slugify('Acme Corp')).toBe('acme-corp');
-  });
-  it('strips diacritics', () => {
-    expect(slugify('Café Über')).toBe('cafe-uber');
-  });
-  it('never returns empty', () => {
-    expect(slugify('!!!')).toBe('org');
   });
 });
 

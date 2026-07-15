@@ -870,10 +870,6 @@ function SettingsTab({ org, isAdmin }: { org: Organization; isAdmin: boolean }) 
                 />
               </Field>
               <Field>
-                <FieldLabel>Slug</FieldLabel>
-                <div className="font-mono text-xs text-muted-foreground">{org.slug}</div>
-              </Field>
-              <Field>
                 <FieldLabel>Created</FieldLabel>
                 <div className="text-xs/relaxed">
                   <RelativeTime date={org.createdAt} />
@@ -896,10 +892,6 @@ function SettingsTab({ org, isAdmin }: { org: Organization; isAdmin: boolean }) 
             <Field>
               <FieldLabel>Name</FieldLabel>
               <div className="text-xs/relaxed">{org.name}</div>
-            </Field>
-            <Field>
-              <FieldLabel>Slug</FieldLabel>
-              <div className="font-mono text-xs text-muted-foreground">{org.slug}</div>
             </Field>
             <Alert>
               <AlertTitle>Only organization admins and owners can change settings.</AlertTitle>

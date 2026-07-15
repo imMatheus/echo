@@ -118,7 +118,7 @@ try {
     const state = result.rows[0];
     if (
       !state ||
-      state.migrationCount !== 4 ||
+      state.migrationCount !== 5 ||
       state.ownerRole !== 'owner' ||
       !state.tsvRebuilt ||
       !state.embeddingCleared ||

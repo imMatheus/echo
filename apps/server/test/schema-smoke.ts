@@ -140,10 +140,10 @@ try {
     [`schema-guard-${suffix}@example.com`],
   );
   const org = await client.query<{ id: string }>(
-    `INSERT INTO organizations (name, slug, created_by)
-     VALUES ('Schema Guard', $1, $2)
+    `INSERT INTO organizations (name, created_by)
+     VALUES ('Schema Guard', $1)
      RETURNING id`,
-    [`schema-guard-${suffix}`, user.rows[0].id],
+    [user.rows[0].id],
   );
   await client.query(
     `INSERT INTO org_members (org_id, user_id, role) VALUES ($1, $2, 'owner')`,
@@ -178,10 +178,10 @@ try {
     [`schema-guard-a-${fixtureSuffix}@example.com`, `schema-guard-b-${fixtureSuffix}@example.com`],
   );
   const fixtureOrg = await client.query<{ id: string }>(
-    `INSERT INTO organizations (name, slug, created_by)
-     VALUES ('Concurrent Schema Guard', $1, $2)
+    `INSERT INTO organizations (name, created_by)
+     VALUES ('Concurrent Schema Guard', $1)
      RETURNING id`,
-    [`concurrent-schema-guard-${fixtureSuffix}`, fixtureUsers.rows[0].id],
+    [fixtureUsers.rows[0].id],
   );
   await client.query(
     `INSERT INTO org_members (org_id, user_id, role)

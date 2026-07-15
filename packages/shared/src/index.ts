@@ -42,7 +42,6 @@ export interface User {
 export interface Organization {
   id: string;
   name: string;
-  slug: string;
   createdAt: string;
 }
 
@@ -216,7 +215,6 @@ export interface ListMemoriesQuery {
 
 export interface CreateOrgRequest {
   name: string;
-  slug?: string;
 }
 
 export interface CreateScopeRequest {
@@ -323,24 +321,4 @@ export interface ApiError {
       | 'internal_error';
     message: string;
   };
-}
-
-// ---------------------------------------------------------------------------
-// Utilities
-// ---------------------------------------------------------------------------
-
-/** URL-friendly org slug: lowercased, diacritics stripped, non-alphanumerics dashed. */
-export function slugify(name: string): string {
-  const stripped = [...name.toLowerCase().normalize('NFKD')]
-    .filter((ch) => {
-      const cp = ch.codePointAt(0) ?? 0;
-      return cp < 0x300 || cp > 0x36f; // drop combining diacritics left by NFKD
-    })
-    .join('');
-  return (
-    stripped
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .slice(0, 48) || 'org'
-  );
 }

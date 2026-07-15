@@ -4,7 +4,6 @@ import { Building2Icon, PlusIcon } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useSWRConfig } from 'swr'
 import { toast } from 'sonner'
-import { slugify } from '@echo/shared'
 import * as api from '@/api'
 import { errorMessage } from '@/api'
 import { keys, useOrgs } from '@/hooks'
@@ -25,7 +24,6 @@ import {
 } from '@/components/ui/dialog'
 import {
   Field,
-  FieldDescription,
   FieldGroup,
   FieldLabel,
 } from '@/components/ui/field'
@@ -94,16 +92,8 @@ function CreateOrgModal({ onClose }: { onClose: () => void }) {
   const navigate = useNavigate()
   const { mutate } = useSWRConfig()
   const [name, setName] = useState('')
-  const [slug, setSlug] = useState('')
-  const [slugTouched, setSlugTouched] = useState(false)
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  const onNameChange = (value: string) => {
-    setName(value)
-    // slugify falls back to "org" on empty input; keep the preview blank instead.
-    if (!slugTouched) setSlug(value.trim() ? slugify(value) : '')
-  }
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
@@ -114,10 +104,7 @@ function CreateOrgModal({ onClose }: { onClose: () => void }) {
     }
     setPending(true)
     try {
-      const res = await api.createOrg({
-        name: name.trim(),
-        slug: slug.trim() || undefined,
-      })
+      const res = await api.createOrg({ name: name.trim() })
       void mutate(keys.orgs)
       toast.success(`Created ${res.org.name}`)
       navigate(`/orgs/${res.org.id}`)
@@ -149,32 +136,12 @@ function CreateOrgModal({ onClose }: { onClose: () => void }) {
               <Input
                 id="org-name"
                 value={name}
-                onChange={(e) => onNameChange(e.target.value)}
+                onChange={(e) => setName(e.target.value)}
                 placeholder="Acme Inc."
                 autoFocus
                 required
                 maxLength={100}
               />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="org-slug">Slug</FieldLabel>
-              <Input
-                id="org-slug"
-                className="font-mono"
-                value={slug}
-                onChange={(e) => {
-                  setSlugTouched(true)
-                  setSlug(
-                    e.target.value.toLowerCase().replace(/[^a-z0-9-]+/g, '-'),
-                  )
-                }}
-                placeholder="acme-inc"
-                minLength={2}
-                maxLength={48}
-              />
-              <FieldDescription>
-                A short URL-friendly identifier.
-              </FieldDescription>
             </Field>
           </FieldGroup>
           <DialogFooter className="mt-4">

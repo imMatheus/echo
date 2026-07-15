@@ -29,6 +29,13 @@
       "when": 1784090806462,
       "tag": "0003_scope_membership_integrity",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1784094143317,
+      "tag": "0004_remove_organization_slug",
+      "breakpoints": true
     }
   ]
 }
