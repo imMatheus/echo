@@ -1,5 +1,4 @@
-import { Link, Navigate } from 'react-router-dom'
-import { useAuth } from '../auth'
+import { Link } from 'react-router-dom'
 import { LogoMark } from '../components/icons'
 import { LoginForm } from '../components/login-form'
 
@@ -31,10 +30,6 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
 }
 
 export default function LoginPage() {
-  const { user, loading } = useAuth()
-
-  if (!loading && user) return <Navigate to="/" replace />
-
   return (
     <AuthLayout>
       <LoginForm />

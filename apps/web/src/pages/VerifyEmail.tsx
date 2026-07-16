@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import * as api from '../api';
 import { errorMessage } from '../api';
-import { useAuth } from '../auth';
 import { Alert, AlertTitle } from '@/components/ui/alert';
 import { FieldDescription, FieldGroup } from '@/components/ui/field';
 import { Spinner } from '@/components/ui/spinner';
@@ -11,7 +10,6 @@ import { AuthLayout } from './Login';
 export default function VerifyEmailPage() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
-  const { refresh } = useAuth();
   const started = useRef(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -25,12 +23,11 @@ export default function VerifyEmailPage() {
     }
     void api
       .verifyEmail({ token })
-      .then(async () => {
-        await refresh();
+      .then(() => {
         navigate('/dashboard', { replace: true });
       })
       .catch((err) => setError(errorMessage(err)));
-  }, [navigate, params, refresh]);
+  }, [navigate, params]);
 
   return (
     <AuthLayout>

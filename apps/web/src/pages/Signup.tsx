@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
-import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import * as api from '../api';
 import { errorMessage } from '../api';
-import { useAuth } from '../auth';
 import { useMeta } from '@/hooks';
 import { AuthLayout } from './Login';
 import { Alert, AlertTitle } from '@/components/ui/alert';
@@ -18,7 +17,6 @@ import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
 
 export default function SignupPage() {
-  const { user, loading } = useAuth();
   const navigate = useNavigate();
   const { data: meta } = useMeta();
   const [name, setName] = useState('');
@@ -26,8 +24,6 @@ export default function SignupPage() {
   const [password, setPassword] = useState('');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  if (!loading && user) return <Navigate to="/" replace />;
 
   const signupDisabled = meta != null && !meta.signupEnabled;
 

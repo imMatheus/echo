@@ -3,7 +3,6 @@ import type { FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import * as api from '../api';
 import { errorMessage } from '../api';
-import { useAuth } from '../auth';
 import { useMeta } from '@/hooks';
 import { Alert, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -18,7 +17,6 @@ import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
 
 export function LoginForm({ className, ...props }: React.ComponentProps<'form'>) {
-  const { refresh } = useAuth();
   const navigate = useNavigate();
   const { data: meta } = useMeta();
   const [email, setEmail] = useState('');
@@ -32,8 +30,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<'form'>)
     setPending(true);
     try {
       await api.login({ email: email.trim(), password });
-      await refresh();
-      navigate('/');
+      navigate('/dashboard');
     } catch (err) {
       if (err instanceof api.ApiRequestError && err.code === 'email_not_verified') {
         navigate(`/check-email?email=${encodeURIComponent(email.trim())}`);

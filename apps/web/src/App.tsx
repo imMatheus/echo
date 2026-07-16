@@ -100,23 +100,20 @@ function Page({ children }: { children: ReactNode }) {
   );
 }
 
-function RequireAuth({ children }: { children: ReactNode }) {
-  const { user, loading } = useAuth();
-  if (loading) return <FullScreenLoading />;
-  if (!user) return <Navigate to="/login" replace />;
-  return <>{children}</>;
+function ProtectedArea() {
+  return (
+    <AuthProvider>
+      <RequireAuth />
+    </AuthProvider>
+  );
 }
 
-/** "/" is the public landing page; signed-in users go straight to /dashboard. */
-function RootRoute() {
-  const { user, loading } = useAuth();
+function RequireAuth() {
+  const { user, error, loading, refresh } = useAuth();
   if (loading) return <FullScreenLoading />;
-  if (user) return <Navigate to="/dashboard" replace />;
-  return (
-    <Page>
-      <LandingPage />
-    </Page>
-  );
+  if (error) return <AuthErrorScreen error={error} retry={refresh} />;
+  if (!user) return <Navigate to="/login" replace />;
+  return <Layout />;
 }
 
 function AppRoutes() {
@@ -129,7 +126,7 @@ function AppRoutes() {
   return (
     <>
       <Routes location={background ?? location}>
-        <Route path="/" element={<RootRoute />} />
+        <Route path="/" element={<Page><LandingPage /></Page>} />
         <Route path="/login" element={<Page><LoginPage /></Page>} />
         <Route path="/signup" element={<Page><SignupPage /></Page>} />
         <Route path="/check-email" element={<Page><CheckEmailPage /></Page>} />
@@ -137,11 +134,7 @@ function AppRoutes() {
         <Route path="/forgot-password" element={<Page><ForgotPasswordPage /></Page>} />
         <Route path="/reset-password" element={<Page><ResetPasswordPage /></Page>} />
         <Route
-          element={
-            <RequireAuth>
-              <Layout />
-            </RequireAuth>
-          }
+          element={<ProtectedArea />}
         >
           <Route path="/dashboard" element={<Page><DashboardPage /></Page>} />
           <Route path="/memories" element={<Page><MemoriesPage /></Page>} />
@@ -165,13 +158,6 @@ function AppRoutes() {
   );
 }
 
-function AuthGate() {
-  const { error, loading, refresh } = useAuth();
-  if (loading) return <FullScreenLoading />;
-  if (error) return <AuthErrorScreen error={error} retry={refresh} />;
-  return <AppRoutes />;
-}
-
 export default function App() {
   return (
     <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
@@ -186,10 +172,8 @@ export default function App() {
         }}
       >
         <BrowserRouter>
-          <AuthProvider>
-            <AuthGate />
-            <Toaster position="bottom-right" />
-          </AuthProvider>
+          <AppRoutes />
+          <Toaster position="bottom-right" />
         </BrowserRouter>
       </SWRConfig>
     </ThemeProvider>

@@ -7,9 +7,9 @@ import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 /**
- * Public landing page, served at "/" for signed-out visitors (signed-in users
- * are redirected to /dashboard). One headline, one explanation, and a small static
- * demo of the remember → recall loop, in the same card language as the app.
+ * Public landing page. It is completely static and does not check session or
+ * server state. One headline, one explanation, and a small demo of the
+ * remember → recall loop, in the same card language as the app.
  */
 export default function LandingPage() {
   return (
