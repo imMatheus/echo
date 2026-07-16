@@ -84,7 +84,7 @@ async function renderClaimedEmail(app: AppContext, claimed: ClaimedEmail) {
     name: user.name,
     email: user.email,
     token,
-    appUrl: app.config.APP_URL ?? `http://localhost:${app.config.PORT}`,
+    appUrl: app.config.APP_URL ?? app.config.WEB_ORIGIN,
     from: app.config.EMAIL_FROM,
     replyTo: app.config.EMAIL_REPLY_TO,
     idempotencyKey: `echo-email-${claimed.id}`,

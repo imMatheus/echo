@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { Client } from 'pg';
 import { createDb, migrate } from '../src/db';
 
-const baseUrl = new URL(process.env.DATABASE_URL ?? 'postgres://echo:echo@localhost:5433/echo');
+const baseUrl = new URL(process.env.DATABASE_URL || 'postgres://echo:echo@localhost:5433/echo');
 const databaseName = `echo_upgrade_${process.pid}_${Date.now()}`;
 const adminUrl = new URL(baseUrl);
 adminUrl.pathname = '/postgres';

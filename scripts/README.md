@@ -4,11 +4,11 @@ End-to-end checks against a running server (no test framework, just node).
 
 ```bash
 # terminal 1: database + server
-docker compose -f docker-compose.dev.yml up -d
+docker compose --env-file apps/server/.env -f docker-compose.dev.yml up -d
 bun run build && bun run start
 
 # terminal 2: full API/MCP/privacy/concurrency suite (74 assertions)
-node scripts/smoke.mjs # defaults to http://127.0.0.1:3246
+node scripts/smoke.mjs # defaults to http://127.0.0.1:8080
 ```
 
 To exercise the pgvector hybrid-search path without a real embedding provider:

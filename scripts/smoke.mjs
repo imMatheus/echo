@@ -1,10 +1,10 @@
-// End-to-end smoke test for Echo (ECHO_BASE_URL defaults to 127.0.0.1:3246).
+// End-to-end smoke test for Echo (ECHO_BASE_URL defaults to 127.0.0.1:8080).
 import { spawnSync } from 'node:child_process';
 import { createHmac } from 'node:crypto';
 import pg from '../apps/server/node_modules/pg/lib/index.js';
 const { Client } = pg;
-const BASE = (process.env.ECHO_BASE_URL ?? 'http://127.0.0.1:3246').replace(/\/+$/, '');
-const DATABASE_URL = process.env.DATABASE_URL ?? 'postgres://echo:echo@localhost:5433/echo';
+const BASE = (process.env.ECHO_BASE_URL ?? 'http://127.0.0.1:8080').replace(/\/+$/, '');
+const DATABASE_URL = process.env.DATABASE_URL || 'postgres://echo:echo@localhost:5433/echo';
 const AUTH_TOKEN_SECRET =
   process.env.AUTH_TOKEN_SECRET || 'echo-development-auth-token-secret-change-before-deploying';
 const RUN = Date.now().toString(36);

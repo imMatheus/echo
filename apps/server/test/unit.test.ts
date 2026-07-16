@@ -2,6 +2,8 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { PoolClient } from 'pg';
 import { loadConfig } from '@/config';
+import { ConsoleEmailProvider } from '@/email/provider';
+import { buildApp } from '@/http/app';
 import { normalizeTags } from '@/core/memories';
 import { CONCURRENT_INDEXES, ensureConcurrentIndexes, LEGACY_INDEXES } from '@/db/post-migrations';
 import {
@@ -17,6 +19,7 @@ import { renderAuthEmail } from '@/email/templates';
 import { toVectorLiteral } from '@/lib/embeddings';
 import { isUniqueViolation } from '@/lib/postgres';
 import { escapeLikePattern } from '@/lib/sql';
+import type { AppContext } from '@/types';
 
 describe('password hashing', () => {
   it('verifies a correct password and rejects a wrong one', async () => {
@@ -212,6 +215,64 @@ describe('configuration', () => {
     expect(config.APP_URL).toBeUndefined();
     expect(config.OPENAI_BASE_URL).toBe('https://api.openai.com/v1');
     expect(config.OLLAMA_URL).toBe('http://localhost:11434');
+  });
+
+  it('passes a configured external database URL through unchanged', () => {
+    const databaseUrl = 'postgresql://app.branch:pscale_pw_secret@demo-useast1-1.horizon.psdb.cloud:5432/echo?sslmode=require';
+    expect(loadConfig({ DATABASE_URL: databaseUrl }).DATABASE_URL).toBe(databaseUrl);
+  });
+
+  it('uses the local Docker database when DATABASE_URL is unset', () => {
+    expect(loadConfig({ DATABASE_URL: '' }).DATABASE_URL).toBe('postgres://echo:echo@localhost:5433/echo');
+  });
+
+  it('configures the local Vite origin and rejects insecure cross-site cookies', () => {
+    expect(loadConfig({}).WEB_ORIGIN).toBe('http://localhost:5173');
+    expect(() => loadConfig({ COOKIE_SAME_SITE: 'none' })).toThrow('requires an HTTPS APP_URL');
+    expect(
+      loadConfig({
+        APP_URL: 'https://app.example.com',
+        WEB_ORIGIN: 'https://app.example.com/',
+        COOKIE_SAME_SITE: 'none',
+        EMAIL_PROVIDER: 'resend',
+        RESEND_API_KEY: 're_test',
+        AUTH_TOKEN_SECRET: 'production-test-token-secret-with-at-least-thirty-two-characters',
+      }).WEB_ORIGIN,
+    ).toBe('https://app.example.com');
+  });
+});
+
+describe('cross-origin dashboard access', () => {
+  it('allows only the configured browser origin and supports credentialed preflight', async () => {
+    const app = await buildApp({
+      config: loadConfig({ WEB_ORIGIN: 'https://app.example.com' }),
+      db: {} as AppContext['db'],
+      embeddings: null,
+      email: new ConsoleEmailProvider(),
+      log: console,
+    });
+    try {
+      const preflight = await app.inject({
+        method: 'OPTIONS',
+        url: '/api/v1/auth/login',
+        headers: {
+          origin: 'https://app.example.com',
+          'access-control-request-method': 'POST',
+        },
+      });
+      expect(preflight.statusCode).toBe(204);
+      expect(preflight.headers['access-control-allow-origin']).toBe('https://app.example.com');
+      expect(preflight.headers['access-control-allow-credentials']).toBe('true');
+
+      const rejected = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/logout',
+        headers: { origin: 'https://attacker.example' },
+      });
+      expect(rejected.statusCode).toBe(403);
+    } finally {
+      await app.close();
+    }
   });
 });
 

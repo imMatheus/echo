@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fastifyCookie from '@fastify/cookie';
+import fastifyCors from '@fastify/cors';
 import fastifyRateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
 import Fastify, { type FastifyInstance } from 'fastify';
@@ -32,6 +33,22 @@ export async function buildApp(app: AppContext): Promise<FastifyInstance> {
     logger: { level: app.config.LOG_LEVEL },
     trustProxy: app.config.TRUST_PROXY,
     bodyLimit: 1024 * 1024,
+  });
+
+  await f.register(fastifyCors, {
+    credentials: true,
+    origin: (origin, callback) => callback(null, !origin || origin === app.config.WEB_ORIGIN),
+  });
+
+  // CORS prevents script reads, but a cross-site form can still issue a simple
+  // unsafe request. Reject browser origins other than the configured dashboard;
+  // non-browser MCP clients do not send Origin and keep using bearer auth.
+  f.addHook('onRequest', async (req) => {
+    if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return;
+    const origin = req.headers.origin;
+    if (origin && origin !== app.config.WEB_ORIGIN) {
+      throw new HttpError('forbidden', 'Origin is not allowed');
+    }
   });
 
   // The dashboard can display one-time API secrets and private memories. Keep

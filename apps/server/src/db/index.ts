@@ -22,6 +22,9 @@ export function createDb(
 
 const MIGRATIONS_DIR = join(dirname(fileURLToPath(import.meta.url)), '../../drizzle');
 
+const MIGRATION_LOCK_KEY = 0x4543484f; // ASCII "ECHO", stable across deployments.
+const MIGRATION_LOCK_TIMEOUT_MS = 5 * 60_000;
+
 /** Apply every pending Drizzle migration in drizzle/, tracked in __drizzle_migrations. */
 export async function migrate(db: Db, log: (msg: string) => void = () => {}): Promise<void> {
   // Drizzle checks the journal before opening its transaction but does not take
@@ -29,11 +32,31 @@ export async function migrate(db: Db, log: (msg: string) => void = () => {}): Pr
   // connection used by the migrator so horizontally-starting replicas serialize.
   const client = await db.$client.connect();
   const migrationDb = drizzle(client, { schema });
-  const lockKey = 0x4543484f; // ASCII "ECHO", stable across deployments.
   let locked = false;
   try {
-    await client.query('SELECT pg_advisory_lock($1::bigint)', [lockKey]);
-    locked = true;
+    // Try-with-deadline rather than a blocking pg_advisory_lock: session locks
+    // leak on transaction-pooled connections (PgBouncer, PlanetScale port 6432),
+    // where a blocking acquire would hang every subsequent boot forever.
+    const deadline = Date.now() + MIGRATION_LOCK_TIMEOUT_MS;
+    while (true) {
+      const result = await client.query<{ locked: boolean }>(
+        'SELECT pg_try_advisory_lock($1::bigint) AS locked',
+        [MIGRATION_LOCK_KEY],
+      );
+      if (result.rows[0]?.locked === true) {
+        locked = true;
+        break;
+      }
+      if (Date.now() >= deadline) {
+        throw new Error(
+          'timed out waiting for the migration advisory lock; if no other replica is migrating, ' +
+            'DATABASE_URL may point at a transaction-pooled port (such as PgBouncer or PlanetScale :6432) ' +
+            'that cannot hold session advisory locks — use the direct connection string instead',
+        );
+      }
+      log('waiting for migration advisory lock...');
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
     await drizzleMigrate(migrationDb, { migrationsFolder: MIGRATIONS_DIR });
     // Drizzle wraps migrations in a transaction. Resumable cleanup batches and
     // concurrent index builds must run after that transaction has committed.
@@ -42,7 +65,7 @@ export async function migrate(db: Db, log: (msg: string) => void = () => {}): Pr
   } finally {
     let releaseError: Error | undefined;
     if (locked) {
-      await client.query('SELECT pg_advisory_unlock($1::bigint)', [lockKey]).catch((error) => {
+      await client.query('SELECT pg_advisory_unlock($1::bigint)', [MIGRATION_LOCK_KEY]).catch((error) => {
         log(`failed to release migration advisory lock: ${String(error)}`);
         releaseError = error instanceof Error ? error : new Error(String(error));
       });

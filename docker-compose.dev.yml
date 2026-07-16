@@ -1,4 +1,5 @@
-# Development database only: docker compose -f docker-compose.dev.yml up -d
+# Development database only:
+# docker compose --env-file apps/server/.env -f docker-compose.dev.yml up -d
 # Matches the default DATABASE_URL (postgres://echo:echo@localhost:5433/echo).
 services:
   db:

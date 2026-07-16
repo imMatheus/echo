@@ -43,7 +43,7 @@ jobs:
       - name: Build
         run: bun run build
       - name: Build production container
-        run: docker build --tag echo-ci:${{ github.sha }} .
+        run: docker build --file apps/server/Dockerfile --tag echo-ci:${{ github.sha }} .
       - name: Schema upgrade smoke test
         env:
           DATABASE_URL: postgres://echo:echo@127.0.0.1:5433/echo
@@ -78,7 +78,7 @@ jobs:
 
           ready=false
           for _ in {1..30}; do
-            if curl --fail --silent http://127.0.0.1:3246/api/v1/health >/dev/null 2>&1; then
+            if curl --fail --silent http://127.0.0.1:8080/api/v1/health >/dev/null 2>&1; then
               ready=true
               break
             fi

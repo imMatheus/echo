@@ -1,4 +1,6 @@
 # syntax=docker/dockerfile:1.4
+# Build from the repository root so the server can include the shared workspace:
+# docker build -f apps/server/Dockerfile .
 
 ARG BUN_VERSION=1.3.9
 
@@ -14,33 +16,24 @@ COPY apps/web/package.json apps/web/
 
 FROM manifests AS development-dependencies
 RUN --mount=type=cache,id=echo-bun-cache,target=/root/.bun/install/cache,sharing=locked \
-  bun install --frozen-lockfile \
-  --filter @echo/shared --filter @echo/server --filter @echo/web
+  bun install --frozen-lockfile --filter @echo/shared --filter @echo/server
 
 FROM development-dependencies AS build
 COPY packages/shared/src packages/shared/src
 COPY packages/shared/tsconfig.json packages/shared/tsconfig.json
 COPY apps/server/src apps/server/src
-COPY apps/server/test apps/server/test
 COPY apps/server/drizzle apps/server/drizzle
 COPY apps/server/tsconfig.json apps/server/tsconfig.json
-COPY apps/web/src apps/web/src
-COPY apps/web/index.html apps/web/index.html
-COPY apps/web/tsconfig.json apps/web/tsconfig.json
-COPY apps/web/vite.config.ts apps/web/vite.config.ts
-RUN bun run --filter @echo/shared build \
-  && bun run --filter @echo/server --filter @echo/web build
+RUN bun run --filter @echo/shared build && bun run --filter @echo/server build
 
 FROM manifests AS production-dependencies
 RUN --mount=type=cache,id=echo-bun-cache,target=/root/.bun/install/cache,sharing=locked \
-  bun install --production --frozen-lockfile --ignore-scripts \
-  --filter @echo/shared --filter @echo/server
+  bun install --production --frozen-lockfile --ignore-scripts --filter @echo/shared --filter @echo/server
 
 FROM base AS runtime
 ENV NODE_ENV=production \
   HOST=0.0.0.0 \
-  PORT=3246 \
-  STATIC_DIR=/app/apps/web/dist
+  PORT=8080
 
 COPY --from=manifests /app/package.json ./package.json
 COPY --from=manifests /app/tsconfig.base.json ./tsconfig.base.json
@@ -52,9 +45,8 @@ COPY --from=build /app/apps/server/tsconfig.json ./apps/server/tsconfig.json
 COPY --from=production-dependencies /app/apps/server/node_modules ./apps/server/node_modules
 COPY --from=build /app/apps/server/src ./apps/server/src
 COPY --from=build /app/apps/server/drizzle ./apps/server/drizzle
-COPY --from=build /app/apps/web/dist ./apps/web/dist
 
-EXPOSE 3246
+EXPOSE 8080
 STOPSIGNAL SIGTERM
 USER bun
 CMD ["bun", "apps/server/src/index.ts"]

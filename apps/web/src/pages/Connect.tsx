@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import type { ApiKeyInfo } from '@echo/shared';
 import * as api from '@/api';
 import { errorMessage } from '@/api';
+import { MCP_URL, SERVER_URL } from '@/server-url';
 import { useApiKeys, useMeta } from '@/hooks';
 import { SourceChip } from '@/components/Badge';
 import { CodeBlock } from '@/components/CodeBlock';
@@ -135,13 +136,14 @@ export default function ConnectPage() {
   const [generated, setGenerated] = useState<{ name: string; secret: string } | null>(null);
   const [revokeTarget, setRevokeTarget] = useState<ApiKeyInfo | null>(null);
 
-  const origin = window.location.origin;
+  const serverOrigin = SERVER_URL;
+  const serverUrl = new URL(serverOrigin);
   const localHostnames = new Set(['localhost', '127.0.0.1', '::1']);
   const needsPublicConnectorUrl =
-    window.location.protocol !== 'https:' || localHostnames.has(window.location.hostname);
+    serverUrl.protocol !== 'https:' || localHostnames.has(serverUrl.hostname);
   const chatGptEndpoint = needsPublicConnectorUrl
     ? 'https://your-public-echo.example.com/mcp'
-    : `${origin}/mcp`;
+    : MCP_URL;
 
   // PlanetScale-style: once a key is generated its real value is dropped straight
   // into every copy-paste snippet; otherwise we show the placeholder to edit.
@@ -155,7 +157,7 @@ export default function ConnectPage() {
           command: 'node',
           args: [BRIDGE_PATH],
           env: {
-            ECHO_URL: origin,
+            ECHO_URL: serverOrigin,
             ECHO_API_KEY: apiKey,
           },
         },
@@ -169,7 +171,7 @@ export default function ConnectPage() {
     '[mcp_servers.echo]',
     'command = "node"',
     `args = ["${BRIDGE_PATH}"]`,
-    `env = { ECHO_URL = "${origin}", ECHO_API_KEY = "${apiKey}" }`,
+    `env = { ECHO_URL = "${serverOrigin}", ECHO_API_KEY = "${apiKey}" }`,
   ].join('\n');
 
   const revoke = async () => {
@@ -266,7 +268,7 @@ export default function ConnectPage() {
                 Run this in a terminal — it registers Echo as a remote MCP server for Claude Code.
               </p>
               <CodeBlock
-                code={`claude mcp add --transport http echo ${origin}/mcp --header "Authorization: Bearer ${apiKey}"`}
+                code={`claude mcp add --transport http echo ${MCP_URL} --header "Authorization: Bearer ${apiKey}"`}
               />
             </TabsContent>
 
@@ -329,7 +331,7 @@ export default function ConnectPage() {
                   <CircleAlertIcon />
                   <AlertTitle>Use a publicly reachable HTTPS URL</AlertTitle>
                   <AlertDescription>
-                    The current {origin} address is local or non-HTTPS and cannot be used as a remote connector
+                    The current server address {serverOrigin} is local or non-HTTPS and cannot be used as a remote connector
                     endpoint. Deploy Echo behind HTTPS, keep public signup disabled, and replace the example host
                     below with that deployment.
                   </AlertDescription>
@@ -349,7 +351,7 @@ export default function ConnectPage() {
                 as a bearer token.
               </p>
               <Labeled label="Endpoint">
-                <CodeBlock code={`${origin}/mcp`} />
+                <CodeBlock code={MCP_URL} />
               </Labeled>
               <Labeled label="Authorization header">
                 <CodeBlock code={`Authorization: Bearer ${apiKey}`} />

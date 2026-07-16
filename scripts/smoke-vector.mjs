@@ -2,7 +2,7 @@
 import pg from '../apps/server/node_modules/pg/lib/index.js';
 const { Client } = pg;
 const BASE = (process.env.ECHO_BASE_URL ?? 'http://127.0.0.1:3247').replace(/\/+$/, '');
-const DATABASE_URL = process.env.DATABASE_URL ?? 'postgres://echo:echo@localhost:5433/echo';
+const DATABASE_URL = process.env.DATABASE_URL || 'postgres://echo:echo@localhost:5433/echo';
 const MOCK_BASE = (process.env.MOCK_EMBEDDINGS_URL ?? 'http://127.0.0.1:9999').replace(/\/+$/, '');
 const RUN = `vec-${Date.now().toString(36)}`;
 let passed = 0, failed = 0;

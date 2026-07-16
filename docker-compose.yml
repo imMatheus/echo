@@ -1,3 +1,5 @@
+# Load server settings with:
+# docker compose --env-file apps/server/.env up -d --build
 services:
   db:
     image: pgvector/pgvector:pg16
@@ -5,7 +7,7 @@ services:
     stop_grace_period: 1m
     environment:
       POSTGRES_USER: echo
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-echo}
+      POSTGRES_PASSWORD: echo
       POSTGRES_DB: echo
     volumes:
       - echo-db-data:/var/lib/postgresql/data
@@ -19,6 +21,7 @@ services:
   app:
     build:
       context: .
+      dockerfile: apps/server/Dockerfile
       target: runtime
     restart: unless-stopped
     init: true
@@ -28,9 +31,9 @@ services:
     cap_drop:
       - ALL
     ports:
-      - "${BIND_ADDRESS:-127.0.0.1}:${PORT:-3246}:3246"
+      - "${BIND_ADDRESS:-127.0.0.1}:${PORT:-8080}:8080"
     environment:
-      DATABASE_URL: ${ECHO_DATABASE_URL:-postgres://echo:echo@db:5432/echo}
+      DATABASE_URL: ${DATABASE_URL:-postgres://echo:echo@db:5432/echo}
       APP_URL: ${APP_URL:-}
       DISABLE_SIGNUP: ${DISABLE_SIGNUP:-false}
       SESSION_TTL_DAYS: ${SESSION_TTL_DAYS:-30}
@@ -47,11 +50,13 @@ services:
       VOYAGE_API_KEY: ${VOYAGE_API_KEY:-}
       OLLAMA_URL: ${OLLAMA_URL:-}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:5173}
+      COOKIE_SAME_SITE: ${COOKIE_SAME_SITE:-lax}
     depends_on:
       db:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3246/api/v1/health || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/api/v1/health || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5

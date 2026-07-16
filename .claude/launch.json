@@ -5,7 +5,7 @@
       "name": "echo",
       "runtimeExecutable": "bun",
       "runtimeArgs": ["apps/server/src/index.ts"],
-      "port": 3246
+      "port": 8080
     },
     {
       "name": "web",

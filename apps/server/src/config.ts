@@ -3,6 +3,7 @@ import { z } from 'zod';
 export const VERSION = '0.1.0';
 
 const DEVELOPMENT_AUTH_TOKEN_SECRET = 'echo-development-auth-token-secret-change-before-deploying';
+const DEFAULT_DATABASE_URL = 'postgres://echo:echo@localhost:5433/echo';
 const EMAIL_FROM_PATTERN = /^(?:[^<>\r\n]+\s)?<([^<>\r\n]+)>$/;
 
 function isEmailAddress(value: string): boolean {
@@ -19,10 +20,13 @@ const boolString = z
   .transform((v) => v === 'true' || v === '1');
 
 const EnvSchema = z.object({
-  DATABASE_URL: z.string().trim().min(1).default('postgres://echo:echo@localhost:5433/echo'),
-  // 3246 spells ECHO on a phone keypad — and stays clear of crowded dev ports
-  // like 8787 (wrangler and friends).
-  PORT: z.coerce.number().int().min(1).max(65_535).default(3246),
+  /** Generic application database connection URL. */
+  DATABASE_URL: z.string().trim().min(1).default(DEFAULT_DATABASE_URL),
+  /** Exact browser dashboard origin permitted to make credentialed API requests. */
+  WEB_ORIGIN: z.string().trim().url().default('http://localhost:5173'),
+  /** `none` is required only when web and API are on different sites. */
+  COOKIE_SAME_SITE: z.enum(['lax', 'none']).default('lax'),
+  PORT: z.coerce.number().int().min(1).max(65_535).default(8080),
   HOST: z.string().trim().min(1).default('0.0.0.0'),
   /** Public URL of this deployment; used to mark session cookies Secure when https. */
   APP_URL: z.string().trim().url().optional(),
@@ -60,6 +64,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     throw new Error(`Invalid environment configuration: ${issues}`);
   }
   const cfg = parsed.data;
+  const webOrigin = new URL(cfg.WEB_ORIGIN).origin;
   if (cfg.EMBEDDINGS_PROVIDER === 'openai' && !cfg.OPENAI_API_KEY) {
     throw new Error('EMBEDDINGS_PROVIDER=openai requires OPENAI_API_KEY');
   }
@@ -82,8 +87,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   if (secureCookies && cfg.EMAIL_PROVIDER === 'console') {
     throw new Error('HTTPS APP_URL requires a production EMAIL_PROVIDER');
   }
+  if (cfg.COOKIE_SAME_SITE === 'none' && !secureCookies) {
+    throw new Error('COOKIE_SAME_SITE=none requires an HTTPS APP_URL');
+  }
   return {
     ...cfg,
+    WEB_ORIGIN: webOrigin,
     secureCookies,
   };
 }

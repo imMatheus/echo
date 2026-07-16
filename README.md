@@ -23,16 +23,20 @@ Every AI app builds its own memory silo. Your preferences live in ChatGPT, your 
 
 ## Quickstart (self-hosted)
 
-Requirements: Docker with the compose plugin.
+Requirements: Docker with the compose plugin, and [Bun](https://bun.sh) for the dashboard.
 
 ```bash
 git clone <your-fork-or-this-repo> echo && cd echo
-docker compose up -d --build
+cp apps/server/.env.example apps/server/.env
+cp apps/web/.env.example apps/web/.env
+docker compose --env-file apps/server/.env up -d --build
+bun install
+bun run dev:web
 ```
 
-Compose binds Echo to `127.0.0.1` by default. Open http://localhost:3246 and create the initial account. The default `console` email provider prints its verification link in `docker compose logs app`; production deployments should configure Resend before enabling signup. Create an API key under **API Keys**, then follow the **Connect** page to wire up your AI apps.
+Compose runs only the API at `http://localhost:8080`; Vite runs the dashboard separately at `http://localhost:5173`. The default `console` email provider prints its verification link in `docker compose logs app`; production deployments should configure Resend before enabling signup. Create an API key under **API Keys**, then follow the **Connect** page to wire up your AI apps.
 
-To enable semantic search, put a provider in `.env` (see `.env.example`) and restart:
+To enable semantic search, set a provider in `apps/server/.env` and restart:
 
 ```bash
 EMBEDDINGS_PROVIDER=openai
@@ -51,7 +55,7 @@ RESEND_API_KEY=re_...
 AUTH_TOKEN_SECRET=<a unique value from: openssl rand -base64 48>
 ```
 
-`APP_URL` is the browser URL embedded in email links: use `http://localhost:5173` for Vite development, `http://localhost:3246` for the Docker-built UI, or your public HTTPS URL in production. Resend requires both `APP_URL` and a unique `AUTH_TOKEN_SECRET`.
+`APP_URL` is the browser URL embedded in email links: use `http://localhost:5173` for Vite development or your public HTTPS dashboard URL in production. Resend requires both `APP_URL` and a unique `AUTH_TOKEN_SECRET`.
 
 Signup requires one-time email verification. Password-reset links expire after one hour, revoke every existing dashboard session when used, and trigger a password-change notification. Verification links expire after 24 hours. Delivery uses a transactional database outbox with retries and provider idempotency.
 
@@ -62,7 +66,7 @@ Create an API key in the dashboard first. The key authenticates as you and tags 
 **Claude Code**
 
 ```bash
-claude mcp add --transport http echo http://localhost:3246/mcp \
+claude mcp add --transport http echo http://localhost:8080/mcp \
   --header "Authorization: Bearer eck_..."
 ```
 
@@ -83,7 +87,7 @@ Then configure the client (Node.js 20 or newer) with the absolute path to the bu
     "echo": {
       "command": "node",
       "args": ["/absolute/path/to/echo/packages/mcp-bridge/dist/index.js"],
-      "env": { "ECHO_URL": "http://localhost:3246", "ECHO_API_KEY": "eck_..." }
+      "env": { "ECHO_URL": "http://localhost:8080", "ECHO_API_KEY": "eck_..." }
     }
   }
 }
@@ -124,13 +128,13 @@ Then configure the client (Node.js 20 or newer) with the absolute path to the bu
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `DATABASE_URL` | `postgres://echo:echo@localhost:5433/echo` outside Compose | Database URL used when the server runs directly on the host |
-| `ECHO_DATABASE_URL` | `postgres://echo:echo@db:5432/echo` in Compose | Compose-only database URL override; percent-encode reserved characters in its password component |
-| `POSTGRES_PASSWORD` | `echo` | Raw password used by the Compose Postgres service |
-| `PORT` / `HOST` | `3246` / `0.0.0.0` | Listen address |
+| `DATABASE_URL` | empty: local Postgres | The only database connection setting. Empty uses the local Docker database; set it to any external PostgreSQL URL to use that database. |
+| `PORT` / `HOST` | `8080` / `0.0.0.0` | Listen address |
 | `APP_URL` | — | Public URL; https enables Secure cookies |
 | `TRUST_PROXY` | `false` | Behind a reverse proxy |
 | `BIND_ADDRESS` | `127.0.0.1` | Host interface published by Docker Compose |
+| `WEB_ORIGIN` | `http://localhost:5173` | The one browser origin allowed to make credentialed API requests |
+| `COOKIE_SAME_SITE` | `lax` | Session-cookie policy; use `none` only for HTTPS cross-site deployments |
 | `DISABLE_SIGNUP` | `false` | Lock down a private instance |
 | `EMAIL_PROVIDER` | `console` | `console` for local logs or `resend` for production delivery |
 | `EMAIL_FROM` / `EMAIL_REPLY_TO` | `Echo <onboarding@resend.dev>` / — | Transactional email sender and optional reply address |
@@ -141,9 +145,15 @@ Then configure the client (Node.js 20 or newer) with the absolute path to the bu
 | `OPENAI_BASE_URL` | `https://api.openai.com/v1` | Optional OpenAI-compatible API base URL |
 | `OPENAI_API_KEY` / `VOYAGE_API_KEY` / `OLLAMA_URL` | — | Provider credentials |
 | `SESSION_TTL_DAYS` | `30` | Dashboard session lifetime |
-| `STATIC_DIR` | auto | Where the built dashboard lives |
+| `STATIC_DIR` | auto | Optional legacy path for serving a dashboard from the API process; split deployments do not use it |
 
-When changing the Compose password, set both variables. For example, use the raw `POSTGRES_PASSWORD=p@ss/word` for Postgres and `ECHO_DATABASE_URL=postgres://echo:p%40ss%2Fword@db:5432/echo` for the app. The separate name prevents a host-development `DATABASE_URL` from accidentally pointing the app container at its own loopback interface. With no overrides, Compose keeps the matching `echo` defaults.
+All server settings belong in `apps/server/.env`. The only web setting belongs in `apps/web/.env`: `VITE_SERVER_URL`. Leave `DATABASE_URL` empty for the local Docker database. Set it once to an external PostgreSQL connection string when deploying or when you want local development to use that provider; every server path uses the same value.
+
+### PlanetScale Postgres
+
+Echo supports PlanetScale **Postgres** (not a PlanetScale Vitess/MySQL database). Copy its **direct** PostgreSQL connection URL (port `5432`) into `DATABASE_URL` — not the pooled PgBouncer URL (port `6432`): Echo serializes boot-time migrations with a session advisory lock, which transaction pooling cannot hold. Echo passes the URL through unchanged for both application traffic and migrations; there is no provider-specific database environment variable.
+
+For separate Vercel dashboard and Cloud Run server deployments, see [the deployment guide](docs/deploy-vercel-cloud-run.md).
 
 Switching embedding providers is safe at any time: memories remember which model embedded them, vector search only matches vectors from the active model, and full-text search covers the rest. Re-save a memory to re-embed it with the new provider.
 
@@ -151,12 +161,14 @@ Switching embedding providers is safe at any time: memories remember which model
 
 ```bash
 bun install
-docker compose -f docker-compose.dev.yml up -d   # pgvector on localhost:5433
+cp apps/server/.env.example apps/server/.env
+cp apps/web/.env.example apps/web/.env
+docker compose --env-file apps/server/.env -f docker-compose.dev.yml up -d   # pgvector on localhost:5433
 bun run --filter @echo/shared build
-bun run dev                                       # server :3246 + vite dev server :5173
+bun run dev                                       # server :8080 + vite dev server :5173
 ```
 
-Open http://localhost:5173 (the dev dashboard proxies `/api` and `/mcp` to the server). Run tests with `bun run test`, typecheck with `bun run typecheck`, production build with `bun run build`.
+Open http://localhost:5173. The dashboard uses `VITE_SERVER_URL` (default: `http://localhost:8080`) to call the separate server. Run tests with `bun run test`, typecheck with `bun run typecheck`, production build with `bun run build`.
 
 ### Repository layout
 

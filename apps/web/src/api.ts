@@ -1,6 +1,7 @@
 /**
  * Typed fetch wrapper around the Echo REST API (see docs/API.md).
- * Same-origin; the session cookie rides along automatically.
+ * The API can be deployed separately from the dashboard. Browser credentials
+ * are included so the server's HTTP-only session cookie travels cross-origin.
  */
 
 import type {
@@ -37,8 +38,9 @@ import type {
   User,
   VerifyEmailRequest,
 } from '@echo/shared';
+import { API_BASE_URL } from './server-url';
 
-const BASE = '/api/v1';
+const BASE = API_BASE_URL;
 const REQUEST_TIMEOUT_MS = 30_000;
 
 /** Emitted when an authenticated API call discovers that the session expired. */
@@ -91,6 +93,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   try {
     res = await fetch(url, {
       method: options.method ?? 'GET',
+      credentials: 'include',
       headers: options.body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
       body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
       signal: controller.signal,

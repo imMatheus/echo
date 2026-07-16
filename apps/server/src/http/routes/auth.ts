@@ -38,7 +38,7 @@ export function authRoutes(app: AppContext) {
       reply.setCookie(SESSION_COOKIE, token, {
         path: '/',
         httpOnly: true,
-        sameSite: 'lax',
+        sameSite: app.config.COOKIE_SAME_SITE,
         secure: app.config.secureCookies,
         expires: expiresAt,
       });
