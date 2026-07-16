@@ -9,11 +9,36 @@ import { runPostMigrations } from './post-migrations';
 /** The Drizzle database handle, threaded everywhere as `app.db`. */
 export type Db = NodePgDatabase<typeof schema> & { $client: Pool };
 
+/**
+ * node-postgres' connection-string parser cannot handle `sslrootcert=system` —
+ * a libpq keyword (Postgres 16+) meaning "trust the operating system CA store".
+ * It instead tries to `readFileSync('system')` and crashes. Managed providers
+ * such as PlanetScale emit exactly that. Node's TLS already verifies against the
+ * bundled public CA roots those providers use, so drop the keyword and keep TLS
+ * on through `sslmode`. Every other URL is returned untouched.
+ */
+export function normalizeDatabaseUrl(databaseUrl: string): string {
+  let url: URL;
+  try {
+    url = new URL(databaseUrl);
+  } catch {
+    return databaseUrl; // libpq key=value DSN or similar — hand it to pg as-is.
+  }
+  if (url.searchParams.get('sslrootcert') !== 'system') return databaseUrl;
+  url.searchParams.delete('sslrootcert');
+  if (!url.searchParams.has('sslmode')) url.searchParams.set('sslmode', 'require');
+  return url.toString();
+}
+
 export function createDb(
   databaseUrl: string,
   onPoolError: (error: Error) => void = (error) => console.error('unexpected idle database client error', error),
 ): Db {
-  const pool = new Pool({ connectionString: databaseUrl, max: 10, connectionTimeoutMillis: 10_000 });
+  const pool = new Pool({
+    connectionString: normalizeDatabaseUrl(databaseUrl),
+    max: 10,
+    connectionTimeoutMillis: 10_000,
+  });
   // pg-pool emits idle-client failures on the pool. An unhandled EventEmitter
   // "error" event terminates the process, so always install a listener.
   pool.on('error', onPoolError);

@@ -164,7 +164,6 @@ bun install
 cp apps/server/.env.example apps/server/.env
 cp apps/web/.env.example apps/web/.env
 docker compose --env-file apps/server/.env -f docker-compose.dev.yml up -d   # pgvector on localhost:5433
-bun run --filter @echo/shared build
 bun run dev                                       # server :8080 + vite dev server :5173
 ```
 

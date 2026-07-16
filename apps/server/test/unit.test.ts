@@ -6,6 +6,7 @@ import { ConsoleEmailProvider } from '@/email/provider';
 import { buildApp } from '@/http/app';
 import { normalizeTags } from '@/core/memories';
 import { CONCURRENT_INDEXES, ensureConcurrentIndexes, LEGACY_INDEXES } from '@/db/post-migrations';
+import { normalizeDatabaseUrl } from '@/db';
 import {
   createAuthActionToken,
   generateApiKey,
@@ -224,6 +225,31 @@ describe('configuration', () => {
 
   it('uses the local Docker database when DATABASE_URL is unset', () => {
     expect(loadConfig({ DATABASE_URL: '' }).DATABASE_URL).toBe('postgres://echo:echo@localhost:5433/echo');
+  });
+});
+
+describe('database URL normalization', () => {
+  it('drops the libpq sslrootcert=system keyword pg cannot parse, keeping TLS on', () => {
+    const normalized = normalizeDatabaseUrl(
+      'postgresql://app.branch:pscale_pw@gcp-us-east1-1.pg.psdb.cloud:5432/postgres?sslmode=verify-full&sslrootcert=system',
+    );
+    const url = new URL(normalized);
+    expect(url.searchParams.has('sslrootcert')).toBe(false);
+    expect(url.searchParams.get('sslmode')).toBe('verify-full');
+  });
+
+  it('forces sslmode on when only sslrootcert=system requested TLS', () => {
+    const url = new URL(normalizeDatabaseUrl('postgres://u:p@host:5432/db?sslrootcert=system'));
+    expect(url.searchParams.has('sslrootcert')).toBe(false);
+    expect(url.searchParams.get('sslmode')).toBe('require');
+  });
+
+  it('leaves the local Docker URL and real CA file paths untouched', () => {
+    expect(normalizeDatabaseUrl('postgres://echo:echo@localhost:5433/echo')).toBe(
+      'postgres://echo:echo@localhost:5433/echo',
+    );
+    const withFile = 'postgres://u:p@host:5432/db?sslrootcert=/etc/ssl/ca.pem';
+    expect(normalizeDatabaseUrl(withFile)).toBe(withFile);
   });
 
   it('configures the local Vite origin and rejects insecure cross-site cookies', () => {
