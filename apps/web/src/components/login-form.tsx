@@ -35,6 +35,10 @@ export function LoginForm({ className, ...props }: React.ComponentProps<'form'>)
       await refresh();
       navigate('/');
     } catch (err) {
+      if (err instanceof api.ApiRequestError && err.code === 'email_not_verified') {
+        navigate(`/check-email?email=${encodeURIComponent(email.trim())}`);
+        return;
+      }
       setError(errorMessage(err));
       setPending(false);
     }
@@ -71,7 +75,12 @@ export function LoginForm({ className, ...props }: React.ComponentProps<'form'>)
           />
         </Field>
         <Field>
-          <FieldLabel htmlFor="login-password">Password</FieldLabel>
+          <div className="flex items-center justify-between gap-3">
+            <FieldLabel htmlFor="login-password">Password</FieldLabel>
+            <Link to="/forgot-password" className="text-xs underline underline-offset-4">
+              Forgot password?
+            </Link>
+          </div>
           <Input
             id="login-password"
             type="password"

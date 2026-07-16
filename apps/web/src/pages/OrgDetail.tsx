@@ -463,7 +463,7 @@ function AddMemberModal({
     } catch (err) {
       if (err instanceof ApiRequestError && err.status === 404) {
         setError(
-          `No Echo account exists for “${email.trim()}”. The user must sign up on this server first — Echo v1 does not send email invites.`,
+          `No verified Echo account exists for “${email.trim()}”. The user must sign up and verify their email first — Echo does not send organization invitations.`,
         );
       } else {
         setError(errorMessage(err));
@@ -490,9 +490,9 @@ function AddMemberModal({
               </Alert>
             )}
             <Alert>
-              <AlertTitle>Email addresses are not verified in this version.</AlertTitle>
+              <AlertTitle>Only verified Echo accounts can be added.</AlertTitle>
               <AlertDescription>
-                Only add account identities you have verified through a trusted channel outside Echo.
+                Echo does not send organization invitations; the user must create and verify their account first.
               </AlertDescription>
             </Alert>
             <Field>

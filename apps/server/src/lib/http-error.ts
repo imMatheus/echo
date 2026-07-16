@@ -10,6 +10,9 @@ const STATUS_BY_CODE: Record<ErrorCode, number> = {
   conflict: 409,
   rate_limited: 429,
   signup_disabled: 403,
+  email_not_verified: 403,
+  verification_invalid: 400,
+  password_reset_invalid: 400,
   internal_error: 500,
 };
 

@@ -4,7 +4,16 @@ import type { PoolClient } from 'pg';
 import { loadConfig } from '@/config';
 import { normalizeTags } from '@/core/memories';
 import { CONCURRENT_INDEXES, ensureConcurrentIndexes, LEGACY_INDEXES } from '@/db/post-migrations';
-import { generateApiKey, hashPassword, sha256Hex, verifyPassword } from '@/lib/crypto';
+import {
+  createAuthActionToken,
+  generateApiKey,
+  hashPassword,
+  sha256Hex,
+  verifyAuthActionToken,
+  verifyPassword,
+} from '@/lib/crypto';
+import { ResendEmailProvider } from '@/email/provider';
+import { renderAuthEmail } from '@/email/templates';
 import { toVectorLiteral } from '@/lib/embeddings';
 import { isUniqueViolation } from '@/lib/postgres';
 import { escapeLikePattern } from '@/lib/sql';
@@ -37,6 +46,69 @@ describe('api keys', () => {
 
   it('generates unique keys', () => {
     expect(generateApiKey().secret).not.toBe(generateApiKey().secret);
+  });
+});
+
+describe('email authentication tokens', () => {
+  it('creates opaque, purpose-bound tokens and stores only their hash', () => {
+    const secret = 'test-auth-token-secret-that-is-at-least-thirty-two-characters';
+    const userId = '00000000-0000-4000-8000-000000000001';
+    const generated = createAuthActionToken(secret, 'verify_email', userId);
+    expect(generated.token).not.toContain(secret);
+    expect(generated.tokenHash).toBe(sha256Hex(generated.token));
+    expect(
+      verifyAuthActionToken(
+        generated.token,
+        { id: generated.id, userId, purpose: 'verify_email', tokenHash: generated.tokenHash },
+        secret,
+      ),
+    ).toBe(true);
+    expect(
+      verifyAuthActionToken(
+        generated.token,
+        { id: generated.id, userId, purpose: 'password_reset', tokenHash: generated.tokenHash },
+        secret,
+      ),
+    ).toBe(false);
+  });
+});
+
+describe('email providers and templates', () => {
+  it('sends Resend API requests with provider idempotency', async () => {
+    const requests: Request[] = [];
+    const provider = new ResendEmailProvider(
+      { RESEND_API_KEY: 're_test' },
+      (async (input, init) => {
+        requests.push(new Request(input, init));
+        return Response.json({ id: 'email_123' });
+      }) as typeof fetch,
+    );
+    const result = await provider.send({
+      to: 'user@example.com',
+      from: 'Echo <auth@example.com>',
+      subject: 'Test',
+      html: '<p>Test</p>',
+      text: 'Test',
+      idempotencyKey: 'outbox-1',
+    });
+    expect(result.messageId).toBe('email_123');
+    expect(requests[0]?.headers.get('idempotency-key')).toBe('outbox-1');
+    expect(requests[0]?.headers.get('authorization')).toBe('Bearer re_test');
+  });
+
+  it('escapes names and puts reset tokens only in the action URL', () => {
+    const email = renderAuthEmail({
+      template: 'password_reset',
+      name: '<script>alert(1)</script>',
+      email: 'user@example.com',
+      token: 'token-value',
+      appUrl: 'https://echo.example',
+      from: 'Echo <auth@example.com>',
+      idempotencyKey: 'outbox-2',
+    });
+    expect(email.html).not.toContain('<script>');
+    expect(email.html).toContain('https://echo.example/reset-password?token=token-value');
+    expect(email.subject).not.toContain('token-value');
   });
 });
 
@@ -78,8 +150,47 @@ describe('Postgres errors', () => {
 
 describe('configuration', () => {
   it('detects secure cookies from a case-insensitive HTTPS scheme', () => {
-    const config = loadConfig({ APP_URL: 'HTTPS://echo.example' });
+    const config = loadConfig({
+      APP_URL: 'HTTPS://echo.example',
+      EMAIL_PROVIDER: 'resend',
+      RESEND_API_KEY: 're_test',
+      AUTH_TOKEN_SECRET: 'production-test-token-secret-with-at-least-thirty-two-characters',
+    });
     expect(config.secureCookies).toBe(true);
+  });
+
+  it('rejects development email credentials for an HTTPS deployment', () => {
+    expect(() => loadConfig({ APP_URL: 'https://echo.example' })).toThrow('unique AUTH_TOKEN_SECRET');
+    expect(() =>
+      loadConfig({
+        APP_URL: 'https://echo.example',
+        AUTH_TOKEN_SECRET: 'production-test-token-secret-with-at-least-thirty-two-characters',
+      }),
+    ).toThrow('production EMAIL_PROVIDER');
+  });
+
+  it('requires a real sender, public URL, and unique secret for Resend', () => {
+    const productionSecret = 'production-test-token-secret-with-at-least-thirty-two-characters';
+    expect(() => loadConfig({ EMAIL_FROM: 'Echo <mail.example.com>' })).toThrow('Invalid environment configuration');
+    expect(() => loadConfig({ EMAIL_REPLY_TO: 'support.example.com' })).toThrow('Invalid environment configuration');
+    expect(() => loadConfig({ EMAIL_PROVIDER: 'resend', RESEND_API_KEY: 're_test' })).toThrow('requires APP_URL');
+    expect(() =>
+      loadConfig({
+        APP_URL: 'http://localhost:5173',
+        EMAIL_PROVIDER: 'resend',
+        RESEND_API_KEY: 're_test',
+      }),
+    ).toThrow('requires a unique AUTH_TOKEN_SECRET');
+    expect(
+      loadConfig({
+        APP_URL: 'http://localhost:5173',
+        EMAIL_PROVIDER: 'resend',
+        EMAIL_FROM: 'Echo <auth@mail.example.com>',
+        EMAIL_REPLY_TO: 'support@mail.example.com',
+        RESEND_API_KEY: 're_test',
+        AUTH_TOKEN_SECRET: productionSecret,
+      }).EMAIL_FROM,
+    ).toBe('Echo <auth@mail.example.com>');
   });
 
   it('rejects out-of-range ports, fractional session TTLs, and unknown log levels', () => {

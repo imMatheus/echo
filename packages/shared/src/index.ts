@@ -166,6 +166,28 @@ export interface LoginRequest {
   password: string;
 }
 
+export interface SignupResponse {
+  verificationRequired: true;
+  email: string;
+}
+
+export interface VerifyEmailRequest {
+  token: string;
+}
+
+export interface ResendVerificationRequest {
+  email: string;
+}
+
+export interface ForgotPasswordRequest {
+  email: string;
+}
+
+export interface ResetPasswordRequest {
+  token: string;
+  password: string;
+}
+
 export interface CreateMemoryRequest {
   content: string;
   /** Defaults to the caller's personal scope. */
@@ -318,6 +340,9 @@ export interface ApiError {
       | 'conflict'
       | 'rate_limited'
       | 'signup_disabled'
+      | 'email_not_verified'
+      | 'verification_invalid'
+      | 'password_reset_invalid'
       | 'internal_error';
     message: string;
   };

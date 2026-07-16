@@ -1,6 +1,8 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { createSession, destroySession, getPersonalScopeId, getUserById, login, signup } from '@/core/auth';
+import { requestPasswordReset, resendEmailVerification, resetPassword, verifyEmail } from '@/core/auth-email';
+import { processEmailOutbox } from '@/core/email-delivery';
 import { HttpError } from '@/lib/http-error';
 import { parse } from '@/lib/validate';
 import type { AppContext } from '@/types';
@@ -17,7 +19,17 @@ const loginSchema = z.object({
   password: z.string().min(1).max(128),
 });
 
+const emailSchema = z.object({ email: z.string().trim().email().max(254) });
+const tokenSchema = z.object({ token: z.string().trim().min(1).max(512) });
+const resetPasswordSchema = tokenSchema.extend({ password: z.string().min(8).max(128) });
+
 const AUTH_RATE_LIMIT = { rateLimit: { max: 10, timeWindow: '1 minute' } };
+const EMAIL_AUTH_RATE_LIMIT = { rateLimit: { max: 5, timeWindow: '1 minute' } };
+
+async function minimumResponseTime(startedAt: number, minimumMs = 250): Promise<void> {
+  const remaining = minimumMs - (Date.now() - startedAt);
+  if (remaining > 0) await new Promise((resolve) => setTimeout(resolve, remaining));
+}
 
 export function authRoutes(app: AppContext) {
   return async function routes(f: FastifyInstance) {
@@ -38,8 +50,26 @@ export function authRoutes(app: AppContext) {
       }
       const body = parse(signupSchema, req.body);
       const user = await signup(app, body);
+      void processEmailOutbox(app, 5).catch((err) => app.log.error({ err }, 'email outbox kick failed'));
+      return { verificationRequired: true as const, email: user.email };
+    });
+
+    f.post('/auth/verify-email', { config: AUTH_RATE_LIMIT }, async (req, reply) => {
+      const body = parse(tokenSchema, req.body);
+      const user = await verifyEmail(app, body.token);
       await setSessionCookie(reply, user.id);
       return { user };
+    });
+
+    f.post('/auth/resend-verification', { config: EMAIL_AUTH_RATE_LIMIT }, async (req) => {
+      const startedAt = Date.now();
+      const body = parse(emailSchema, req.body);
+      const queued = await resendEmailVerification(app, body.email);
+      await minimumResponseTime(startedAt);
+      if (queued) {
+        void processEmailOutbox(app, 5).catch((err) => app.log.error({ err }, 'email outbox kick failed'));
+      }
+      return { ok: true as const };
     });
 
     f.post('/auth/login', { config: AUTH_RATE_LIMIT }, async (req, reply) => {
@@ -47,6 +77,25 @@ export function authRoutes(app: AppContext) {
       const user = await login(app, body.email, body.password);
       await setSessionCookie(reply, user.id);
       return { user };
+    });
+
+    f.post('/auth/forgot-password', { config: EMAIL_AUTH_RATE_LIMIT }, async (req) => {
+      const startedAt = Date.now();
+      const body = parse(emailSchema, req.body);
+      const queued = await requestPasswordReset(app, body.email);
+      await minimumResponseTime(startedAt);
+      if (queued) {
+        void processEmailOutbox(app, 5).catch((err) => app.log.error({ err }, 'email outbox kick failed'));
+      }
+      return { ok: true as const };
+    });
+
+    f.post('/auth/reset-password', { config: EMAIL_AUTH_RATE_LIMIT }, async (req, reply) => {
+      const body = parse(resetPasswordSchema, req.body);
+      await resetPassword(app, body.token, body.password);
+      void processEmailOutbox(app, 5).catch((err) => app.log.error({ err }, 'email outbox kick failed'));
+      reply.clearCookie(SESSION_COOKIE, { path: '/' });
+      return { ok: true as const };
     });
 
     f.post('/auth/logout', async (req, reply) => {

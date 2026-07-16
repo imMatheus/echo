@@ -1,11 +1,12 @@
 import type { User } from '@echo/shared';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, isNotNull, sql } from 'drizzle-orm';
 import { scopes, sessions, users } from '@/db/schema';
 import { generateSessionToken, hashPassword, sha256Hex, verifyPassword } from '@/lib/crypto';
-import { conflict, unauthorized } from '@/lib/http-error';
+import { conflict, HttpError, unauthorized } from '@/lib/http-error';
 import { isUniqueViolation } from '@/lib/postgres';
 import type { AppContext } from '@/types';
 import { logAudit } from './audit';
+import { queueAuthActionEmail } from './auth-email';
 
 type UserRow = typeof users.$inferSelect;
 
@@ -33,6 +34,7 @@ export async function signup(
         .values({ email: input.email, name: input.name, passwordHash })
         .returning();
       await tx.insert(scopes).values({ type: 'personal', name: 'Personal', userId: created.id });
+      await queueAuthActionEmail(tx, app.config, created.id, 'verify_email');
       return created;
     });
   } catch (error) {
@@ -56,6 +58,9 @@ export async function login(app: AppContext, email: string, password: string): P
     ? await verifyPassword(password, row.passwordHash)
     : await verifyPassword(password, await DUMMY_HASH).then(() => false);
   if (!row || !ok) throw unauthorized('Invalid email or password');
+  if (!row.emailVerifiedAt) {
+    throw new HttpError('email_not_verified', 'Verify your email address before logging in');
+  }
   await logAudit(app, { action: 'auth.login', actorUserId: row.id });
   return mapUser(row);
 }
@@ -72,7 +77,13 @@ export async function getSessionUser(app: AppContext, token: string): Promise<Us
     .select({ id: users.id, email: users.email, name: users.name, createdAt: users.createdAt })
     .from(sessions)
     .innerJoin(users, eq(users.id, sessions.userId))
-    .where(and(eq(sessions.tokenHash, sha256Hex(token)), sql`${sessions.expiresAt} > now()`))
+    .where(
+      and(
+        eq(sessions.tokenHash, sha256Hex(token)),
+        sql`${sessions.expiresAt} > now()`,
+        isNotNull(users.emailVerifiedAt),
+      ),
+    )
     .limit(1);
   return row ? mapUser(row) : null;
 }

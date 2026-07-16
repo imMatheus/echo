@@ -1,6 +1,12 @@
 // End-to-end smoke test for Echo (ECHO_BASE_URL defaults to 127.0.0.1:3246).
 import { spawnSync } from 'node:child_process';
+import { createHmac } from 'node:crypto';
+import pg from '../apps/server/node_modules/pg/lib/index.js';
+const { Client } = pg;
 const BASE = (process.env.ECHO_BASE_URL ?? 'http://127.0.0.1:3246').replace(/\/+$/, '');
+const DATABASE_URL = process.env.DATABASE_URL ?? 'postgres://echo:echo@localhost:5433/echo';
+const AUTH_TOKEN_SECRET =
+  process.env.AUTH_TOKEN_SECRET || 'echo-development-auth-token-secret-change-before-deploying';
 const RUN = Date.now().toString(36);
 let passed = 0, failed = 0;
 
@@ -48,15 +54,47 @@ async function mcp(payload, bearer) {
   return { status: res.status, json, text, res };
 }
 
-console.log('— auth —');
-const sigA = await api('POST', '/auth/signup', { body: { email: `alice-${RUN}@example.com`, password: 'password-alice', name: 'Alice' } });
-check('signup alice 200', sigA.status === 200, JSON.stringify(sigA.json));
-const cookieA = cookieFrom(sigA.res);
-check('alice got session cookie', cookieA.length > 20);
+async function authToken(email, purpose) {
+  const client = new Client({ connectionString: DATABASE_URL });
+  try {
+    await client.connect();
+    const result = await client.query(
+      `SELECT token.id, token.user_id
+       FROM auth_tokens AS token
+       JOIN users AS account ON account.id = token.user_id
+       WHERE account.email = $1 AND token.purpose = $2 AND token.used_at IS NULL
+       ORDER BY token.created_at DESC LIMIT 1`,
+      [email, purpose],
+    );
+    const row = result.rows[0];
+    if (!row) throw new Error(`No ${purpose} token found for ${email}`);
+    const signature = createHmac('sha256', AUTH_TOKEN_SECRET)
+      .update(`echo-auth-token\0${purpose}\0${row.id}\0${row.user_id}`)
+      .digest('base64url');
+    return `${row.id}.${signature}`;
+  } finally {
+    await client.end().catch(() => {});
+  }
+}
 
-const sigB = await api('POST', '/auth/signup', { body: { email: `bob-${RUN}@example.com`, password: 'password-bob!', name: 'Bob' } });
-const cookieB = cookieFrom(sigB.res);
+console.log('— auth —');
+const aliceEmail = `alice-${RUN}@example.com`;
+const bobEmail = `bob-${RUN}@example.com`;
+const sigA = await api('POST', '/auth/signup', { body: { email: aliceEmail, password: 'password-alice', name: 'Alice' } });
+check('signup alice 200', sigA.status === 200, JSON.stringify(sigA.json));
+check('signup requires verification and has no session', sigA.json?.verificationRequired === true && !cookieFrom(sigA.res));
+
+const unverifiedLogin = await api('POST', '/auth/login', { body: { email: aliceEmail, password: 'password-alice' } });
+check('unverified login blocked', unverifiedLogin.status === 403 && unverifiedLogin.json?.error?.code === 'email_not_verified');
+const verifyA = await api('POST', '/auth/verify-email', { body: { token: await authToken(aliceEmail, 'verify_email') } });
+let cookieA = cookieFrom(verifyA.res);
+check('alice verification creates session', verifyA.status === 200 && cookieA.length > 20);
+
+const sigB = await api('POST', '/auth/signup', { body: { email: bobEmail, password: 'password-bob!', name: 'Bob' } });
 check('signup bob 200', sigB.status === 200);
+const verifyB = await api('POST', '/auth/verify-email', { body: { token: await authToken(bobEmail, 'verify_email') } });
+const cookieB = cookieFrom(verifyB.res);
+check('bob verification creates session', verifyB.status === 200 && cookieB.length > 20);
 
 const meA = await api('GET', '/auth/me', { cookie: cookieA });
 check('me returns user + personalScopeId', meA.json?.user?.name === 'Alice' && !!meA.json?.personalScopeId);
@@ -65,6 +103,20 @@ const aliceScope = meA.json.personalScopeId;
 
 const badLogin = await api('POST', '/auth/login', { body: { email: `alice-${RUN}@example.com`, password: 'wrong-password' } });
 check('bad login 401', badLogin.status === 401);
+
+const unknownReset = await api('POST', '/auth/forgot-password', { body: { email: `missing-${RUN}@example.com` } });
+const knownReset = await api('POST', '/auth/forgot-password', { body: { email: aliceEmail } });
+check('password reset request does not enumerate accounts', unknownReset.status === 200 && knownReset.status === 200);
+const resetToken = await authToken(aliceEmail, 'password_reset');
+const reset = await api('POST', '/auth/reset-password', { body: { token: resetToken, password: 'new-password-alice' } });
+check('password reset succeeds', reset.status === 200);
+const resetReuse = await api('POST', '/auth/reset-password', { body: { token: resetToken, password: 'another-password' } });
+check('password reset token is one-time', resetReuse.status === 400 && resetReuse.json?.error?.code === 'password_reset_invalid');
+const revokedByReset = await api('GET', '/auth/me', { cookie: cookieA });
+check('password reset revokes existing sessions', revokedByReset.status === 401);
+const reloginA = await api('POST', '/auth/login', { body: { email: aliceEmail, password: 'new-password-alice' } });
+cookieA = cookieFrom(reloginA.res);
+check('new password logs in', reloginA.status === 200 && cookieA.length > 20);
 
 const noAuth = await api('GET', '/memories');
 check('unauthenticated list 401', noAuth.status === 401);
@@ -128,7 +180,7 @@ const orgScope = scopes1.json?.scopes?.find(s => s.type === 'organization' && s.
 check('org scope auto-created and accessible', !!orgScope);
 check('alice canManage org scope', orgScope?.canManage === true);
 
-const addBob = await api('POST', `/orgs/${orgId}/members`, { cookie: cookieA, body: { email: `bob-${RUN}@example.com`, role: 'member' } });
+const addBob = await api('POST', `/orgs/${orgId}/members`, { cookie: cookieA, body: { email: bobEmail, role: 'member' } });
 check('add bob as member 201', addBob.status === 201);
 
 const ghost = await api('POST', `/orgs/${orgId}/members`, { cookie: cookieA, body: { email: 'ghost@example.com' } });
@@ -157,7 +209,7 @@ check('inaccessible nested scope does not leak members (404)', hiddenTeamMembers
 const bobScopes = await api('GET', '/scopes', { cookie: cookieB });
 check('bob does not see team scope (not a member)', !bobScopes.json?.scopes?.some(s => s.id === team.json.scope.id));
 
-const addBobTeam = await api('POST', `/scopes/${team.json.scope.id}/members`, { cookie: cookieA, body: { email: `bob-${RUN}@example.com` } });
+const addBobTeam = await api('POST', `/scopes/${team.json.scope.id}/members`, { cookie: cookieA, body: { email: bobEmail } });
 check('add bob to team scope', addBobTeam.status === 201);
 const bobScopes2 = await api('GET', '/scopes', { cookie: cookieB });
 check('bob now sees team scope', bobScopes2.json?.scopes?.some(s => s.id === team.json.scope.id));
@@ -254,11 +306,11 @@ const bobOrgAudit = await api('GET', `/orgs/${orgId}/audit`, { cookie: cookieB }
 check('member cannot read org audit (403)', bobOrgAudit.status === 403);
 
 console.log('— concurrent ownership invariant —');
-const promoteBob = await api('PATCH', `/orgs/${orgId}/members/${sigB.json.user.id}`, { cookie: cookieA, body: { role: 'owner' } });
+const promoteBob = await api('PATCH', `/orgs/${orgId}/members/${verifyB.json.user.id}`, { cookie: cookieA, body: { role: 'owner' } });
 check('promote bob to owner', promoteBob.status === 200);
 const concurrentDemotions = await Promise.all([
   api('PATCH', `/orgs/${orgId}/members/${meA.json.user.id}`, { cookie: cookieA, body: { role: 'member' } }),
-  api('PATCH', `/orgs/${orgId}/members/${sigB.json.user.id}`, { cookie: cookieB, body: { role: 'member' } }),
+  api('PATCH', `/orgs/${orgId}/members/${verifyB.json.user.id}`, { cookie: cookieB, body: { role: 'member' } }),
 ]);
 const demotionStatuses = concurrentDemotions.map((result) => result.status).sort();
 check('concurrent demotions preserve one owner', JSON.stringify(demotionStatuses) === JSON.stringify([200, 400]), JSON.stringify(demotionStatuses));

@@ -1,5 +1,5 @@
 import type { Organization, OrganizationWithRole, OrgMember, OrgRole, OrgScopeType, ScopeMember } from '@echo/shared';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, isNotNull, sql } from 'drizzle-orm';
 import { orgMembers, organizations, scopeMembers, scopes, users } from '@/db/schema';
 import { badRequest, conflict, forbidden, notFound } from '@/lib/http-error';
 import type { AppContext, AuthContext } from '@/types';
@@ -191,9 +191,9 @@ export async function addOrgMember(
     const [user] = await tx
       .select({ id: users.id, email: users.email, name: users.name })
       .from(users)
-      .where(eq(users.email, email))
+      .where(and(eq(users.email, email), isNotNull(users.emailVerifiedAt)))
       .limit(1);
-    if (!user) throw notFound(`No Echo account exists for ${email} — they need to sign up first`);
+    if (!user) throw notFound(`No verified Echo account exists for ${email} — they need to sign up and verify first`);
     const inserted = await tx
       .insert(orgMembers)
       .values({ orgId, userId: user.id, role })
@@ -496,9 +496,9 @@ export async function addScopeMember(app: AppContext, ctx: AuthContext, scopeId:
     const [user] = await tx
       .select({ id: users.id, email: users.email, name: users.name })
       .from(users)
-      .where(eq(users.email, email))
+      .where(and(eq(users.email, email), isNotNull(users.emailVerifiedAt)))
       .limit(1);
-    if (!user) throw notFound(`No Echo account exists for ${email}`);
+    if (!user) throw notFound(`No verified Echo account exists for ${email}`);
     const [membership] = await tx
       .select({ role: orgMembers.role })
       .from(orgMembers)

@@ -1,5 +1,8 @@
 // Verifies hybrid search (ECHO_BASE_URL defaults to 127.0.0.1:3247).
+import pg from '../apps/server/node_modules/pg/lib/index.js';
+const { Client } = pg;
 const BASE = (process.env.ECHO_BASE_URL ?? 'http://127.0.0.1:3247').replace(/\/+$/, '');
+const DATABASE_URL = process.env.DATABASE_URL ?? 'postgres://echo:echo@localhost:5433/echo';
 const MOCK_BASE = (process.env.MOCK_EMBEDDINGS_URL ?? 'http://127.0.0.1:9999').replace(/\/+$/, '');
 const RUN = `vec-${Date.now().toString(36)}`;
 let passed = 0, failed = 0;
@@ -37,11 +40,24 @@ async function releaseSlowRequests() {
   if (payload.released < 1) throw new Error('mock embedding barrier had no request to release');
 }
 
+async function markTestAccountVerified(email) {
+  const client = new Client({ connectionString: DATABASE_URL });
+  try {
+    await client.connect();
+    await client.query('UPDATE users SET email_verified_at = now() WHERE email = $1', [email]);
+  } finally {
+    await client.end().catch(() => {});
+  }
+}
+
 const meta = await api('GET', '/meta');
 check('meta reports openai embeddings', meta.json?.embeddings?.provider === 'openai', JSON.stringify(meta.json));
 
-const sig = await api('POST', '/auth/signup', { body: { email: `${RUN}@example.com`, password: 'password-123', name: 'Vec' } });
-const cookie = `echo_session=${sig.res.headers.get('set-cookie').match(/echo_session=([^;]+)/)[1]}`;
+const accountEmail = `${RUN}@example.com`;
+await api('POST', '/auth/signup', { body: { email: accountEmail, password: 'password-123', name: 'Vec' } });
+await markTestAccountVerified(accountEmail);
+const login = await api('POST', '/auth/login', { body: { email: accountEmail, password: 'password-123' } });
+const cookie = `echo_session=${login.res.headers.get('set-cookie').match(/echo_session=([^;]+)/)[1]}`;
 
 const contents = [
   'The staging database password rotates every Friday via vault',
@@ -79,10 +95,13 @@ check('mismatched vector falls back to full-text', mixedDimensionResult?.similar
 
 // Mutation-time authorization regression: access can be revoked while a slow
 // embedding call is in flight. The eventual write must re-check membership.
-const bobSignup = await api('POST', '/auth/signup', {
-  body: { email: `${RUN}-bob@example.com`, password: 'password-123', name: 'Vector Bob' },
+const bobEmail = `${RUN}-bob@example.com`;
+await api('POST', '/auth/signup', {
+  body: { email: bobEmail, password: 'password-123', name: 'Vector Bob' },
 });
-const bobCookie = `echo_session=${bobSignup.res.headers.get('set-cookie').match(/echo_session=([^;]+)/)[1]}`;
+await markTestAccountVerified(bobEmail);
+const bobLogin = await api('POST', '/auth/login', { body: { email: bobEmail, password: 'password-123' } });
+const bobCookie = `echo_session=${bobLogin.res.headers.get('set-cookie').match(/echo_session=([^;]+)/)[1]}`;
 const org = await api('POST', '/orgs', { cookie, body: { name: `Vector Race ${RUN}` } });
 const orgId = org.json.org.id;
 const scopeList = await api('GET', '/scopes', { cookie });
@@ -93,7 +112,7 @@ const protectedMemory = await api('POST', '/memories', {
 });
 await api('POST', `/orgs/${orgId}/members`, {
   cookie,
-  body: { email: `${RUN}-bob@example.com`, role: 'member' },
+  body: { email: bobEmail, role: 'member' },
 });
 
 let slowBefore = await slowRequestCount();
@@ -105,7 +124,7 @@ const pendingSearch = api('POST', '/memories/search', {
   },
 });
 await waitForSlowRequest(slowBefore);
-await api('DELETE', `/orgs/${orgId}/members/${bobSignup.json.user.id}`, { cookie });
+await api('DELETE', `/orgs/${orgId}/members/${bobLogin.json.user.id}`, { cookie });
 await releaseSlowRequests();
 const revokedSearch = await pendingSearch;
 check('revoked in-flight search completes safely', revokedSearch.status === 200, `status=${revokedSearch.status}`);
@@ -116,7 +135,7 @@ check(
 
 await api('POST', `/orgs/${orgId}/members`, {
   cookie,
-  body: { email: `${RUN}-bob@example.com`, role: 'member' },
+  body: { email: bobEmail, role: 'member' },
 });
 
 slowBefore = await slowRequestCount();
@@ -125,7 +144,7 @@ const pendingCreate = api('POST', '/memories', {
   body: { content: '[slow-embedding] revoked create must not persist', scopeId: orgScope.id },
 });
 await waitForSlowRequest(slowBefore);
-await api('DELETE', `/orgs/${orgId}/members/${bobSignup.json.user.id}`, { cookie });
+await api('DELETE', `/orgs/${orgId}/members/${bobLogin.json.user.id}`, { cookie });
 await releaseSlowRequests();
 const revokedCreate = await pendingCreate;
 check('revoked in-flight create is rejected', revokedCreate.status === 404, `status=${revokedCreate.status}`);
@@ -134,7 +153,7 @@ check('revoked in-flight create stores no row', !afterCreateRace.json.memories.s
 
 await api('POST', `/orgs/${orgId}/members`, {
   cookie,
-  body: { email: `${RUN}-bob@example.com`, role: 'member' },
+  body: { email: bobEmail, role: 'member' },
 });
 const editable = await api('POST', '/memories', {
   cookie: bobCookie,
@@ -146,7 +165,7 @@ const pendingUpdate = api('PATCH', `/memories/${editable.json.memory.id}`, {
   body: { content: '[slow-embedding] unauthorized replacement' },
 });
 await waitForSlowRequest(slowBefore);
-await api('DELETE', `/orgs/${orgId}/members/${bobSignup.json.user.id}`, { cookie });
+await api('DELETE', `/orgs/${orgId}/members/${bobLogin.json.user.id}`, { cookie });
 await releaseSlowRequests();
 const revokedUpdate = await pendingUpdate;
 check('revoked in-flight update is rejected', revokedUpdate.status === 404, `status=${revokedUpdate.status}`);

@@ -43,6 +43,13 @@
       "when": 1784139094198,
       "tag": "0005_drop_admin_role",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1784148131717,
+      "tag": "0006_auth_email_flows",
+      "breakpoints": true
     }
   ]
 }

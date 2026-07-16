@@ -115,6 +115,7 @@ try {
       tsvRebuilt: boolean;
       embeddingCleared: boolean;
       scopeMembershipRepaired: boolean;
+      legacyUsersVerified: boolean;
     }>(`
       SELECT
         (SELECT count(*)::int FROM drizzle.__drizzle_migrations) AS "migrationCount",
@@ -130,16 +131,18 @@ try {
         (SELECT member.org_id = scope.org_id
          FROM scope_members AS member
          JOIN scopes AS scope ON scope.id = member.scope_id
-         LIMIT 1) AS "scopeMembershipRepaired"`);
+         LIMIT 1) AS "scopeMembershipRepaired",
+        (SELECT bool_and(email_verified_at = created_at) FROM users) AS "legacyUsersVerified"`);
     const state = result.rows[0];
     if (
       !state ||
-      state.migrationCount !== 6 ||
+      state.migrationCount !== 7 ||
       state.ownerRole !== 'owner' ||
       !state.adminDemoted ||
       !state.tsvRebuilt ||
       !state.embeddingCleared ||
-      !state.scopeMembershipRepaired
+      !state.scopeMembershipRepaired ||
+      !state.legacyUsersVerified
     ) {
       throw new Error(`schema upgrade repair failed: ${JSON.stringify(state)}`);
     }

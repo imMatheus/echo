@@ -18,7 +18,7 @@ import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
 
 export default function SignupPage() {
-  const { user, loading, refresh } = useAuth();
+  const { user, loading } = useAuth();
   const navigate = useNavigate();
   const { data: meta } = useMeta();
   const [name, setName] = useState('');
@@ -40,9 +40,8 @@ export default function SignupPage() {
     }
     setPending(true);
     try {
-      await api.signup({ name: name.trim(), email: email.trim(), password });
-      await refresh();
-      navigate('/');
+      const result = await api.signup({ name: name.trim(), email: email.trim(), password });
+      navigate(`/check-email?email=${encodeURIComponent(result.email)}`);
     } catch (err) {
       setError(errorMessage(err));
       setPending(false);

@@ -42,6 +42,12 @@ const expectedTriggers = {
     triggerType: 23,
     updateColumns: ['org_id', 'scope_id'],
   },
+  echo_sessions_verified_user_trigger: {
+    tableName: 'sessions',
+    functionName: 'echo_require_verified_session_user',
+    triggerType: 23,
+    updateColumns: ['user_id'],
+  },
 } as const;
 
 try {
@@ -52,6 +58,7 @@ try {
     dimensionMismatches: number;
     missingSearchVectors: number;
     invalidScopeMemberships: number;
+    unverifiedSessions: number;
   }>(`
     SELECT
       (SELECT count(*)::int
@@ -72,7 +79,11 @@ try {
             SELECT 1 FROM org_members AS org_member
             WHERE org_member.org_id = member.org_id
               AND org_member.user_id = member.user_id
-          )) AS "invalidScopeMemberships"`);
+          )) AS "invalidScopeMemberships",
+      (SELECT count(*)::int
+       FROM sessions AS session
+       JOIN users AS account ON account.id = session.user_id
+       WHERE account.email_verified_at IS NULL) AS "unverifiedSessions"`);
 
   const state = integrity.rows[0];
   if (
@@ -80,7 +91,8 @@ try {
     state.ownerless !== 0 ||
     state.dimensionMismatches !== 0 ||
     state.missingSearchVectors !== 0 ||
-    state.invalidScopeMemberships !== 0
+    state.invalidScopeMemberships !== 0 ||
+    state.unverifiedSessions !== 0
   ) {
     throw new Error(`schema integrity check failed: ${JSON.stringify(state)}`);
   }
@@ -130,6 +142,28 @@ try {
       throw new Error(`trigger ${name} is stale or missing: ${JSON.stringify(actual)}`);
     }
   }
+
+  await client.query('BEGIN');
+  let unverifiedSessionRejected = false;
+  try {
+    const unverified = await client.query<{ id: string }>(
+      `INSERT INTO users (email, name, password_hash)
+       VALUES ($1, 'Unverified Session Guard', 'unused') RETURNING id`,
+      [`unverified-session-${Date.now()}@example.com`],
+    );
+    await client.query(
+      `INSERT INTO sessions (token_hash, user_id, expires_at)
+       VALUES ($1, $2, now() + interval '1 hour')`,
+      [`unverified-${Date.now()}`, unverified.rows[0].id],
+    );
+  } catch (error) {
+    const postgresError = error as { code?: string; constraint?: string };
+    unverifiedSessionRejected =
+      postgresError.code === '23514' && postgresError.constraint === 'sessions_verified_user_required';
+  } finally {
+    await client.query('ROLLBACK');
+  }
+  if (!unverifiedSessionRejected) throw new Error('unverified account received a database session');
 
   await client.query('BEGIN');
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;

@@ -1,4 +1,4 @@
-import { createHash, randomBytes, scrypt as scryptCb, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, randomBytes, randomUUID, scrypt as scryptCb, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 
 const scrypt = promisify(scryptCb) as (
@@ -73,6 +73,61 @@ export function sha256Hex(input: string): string {
 /** Random session token; only its sha256 is stored server-side. */
 export function generateSessionToken(): string {
   return randomBytes(32).toString('base64url');
+}
+
+export type AuthTokenPurpose = 'verify_email' | 'password_reset';
+
+function deriveAuthActionToken(
+  secret: string,
+  purpose: AuthTokenPurpose,
+  id: string,
+  userId: string,
+): string {
+  const signature = createHmac('sha256', secret)
+    .update(`echo-auth-token\0${purpose}\0${id}\0${userId}`)
+    .digest('base64url');
+  return `${id}.${signature}`;
+}
+
+export function createAuthActionToken(
+  secret: string,
+  purpose: AuthTokenPurpose,
+  userId: string,
+): { id: string; token: string; tokenHash: string } {
+  const id = randomUUID();
+  const token = deriveAuthActionToken(secret, purpose, id, userId);
+  return { id, token, tokenHash: sha256Hex(token) };
+}
+
+export function rebuildAuthActionToken(
+  secret: string,
+  purpose: AuthTokenPurpose,
+  id: string,
+  userId: string,
+): string {
+  return deriveAuthActionToken(secret, purpose, id, userId);
+}
+
+export function authActionTokenId(candidate: string): string | null {
+  const match = /^([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\.[A-Za-z0-9_-]{43}$/i.exec(
+    candidate,
+  );
+  return match?.[1]?.toLowerCase() ?? null;
+}
+
+export function verifyAuthActionToken(
+  candidate: string,
+  stored: { id: string; userId: string; purpose: AuthTokenPurpose; tokenHash: string },
+  secret: string,
+): boolean {
+  if (authActionTokenId(candidate) !== stored.id.toLowerCase()) return false;
+  const expected = deriveAuthActionToken(secret, stored.purpose, stored.id, stored.userId);
+  const candidateBytes = Buffer.from(candidate);
+  const expectedBytes = Buffer.from(expected);
+  if (candidateBytes.length !== expectedBytes.length || !timingSafeEqual(candidateBytes, expectedBytes)) return false;
+  const candidateHash = Buffer.from(sha256Hex(candidate), 'hex');
+  const storedHash = Buffer.from(stored.tokenHash, 'hex');
+  return candidateHash.length === storedHash.length && timingSafeEqual(candidateHash, storedHash);
 }
 
 /** API key: eck_ prefix + 32 random bytes. */

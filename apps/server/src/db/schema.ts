@@ -49,6 +49,7 @@ export const users = pgTable('users', {
   email: citext('email').unique().notNull(),
   name: text('name').notNull(),
   passwordHash: text('password_hash').notNull(),
+  emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
@@ -66,6 +67,59 @@ export const sessions = pgTable(
   (t) => [
     index('sessions_user_idx').on(t.userId),
     index('sessions_expires_idx').on(t.expiresAt),
+  ],
+);
+
+export const authTokens = pgTable(
+  'auth_tokens',
+  {
+    id: uuid('id').primaryKey(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    purpose: text('purpose').notNull(),
+    tokenHash: text('token_hash').notNull().unique(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    usedAt: timestamp('used_at', { withTimezone: true }),
+  },
+  (t) => [
+    index('auth_tokens_user_purpose_idx').on(t.userId, t.purpose, t.createdAt),
+    index('auth_tokens_expires_idx').on(t.expiresAt),
+    check('auth_tokens_purpose_check', sql`${t.purpose} IN ('verify_email', 'password_reset')`),
+  ],
+);
+
+export const emailOutbox = pgTable(
+  'email_outbox',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    authTokenId: uuid('auth_token_id').references(() => authTokens.id, { onDelete: 'cascade' }),
+    template: text('template').notNull(),
+    attempts: integer('attempts').notNull().default(0),
+    nextAttemptAt: timestamp('next_attempt_at', { withTimezone: true }).notNull().defaultNow(),
+    lockedAt: timestamp('locked_at', { withTimezone: true }),
+    sentAt: timestamp('sent_at', { withTimezone: true }),
+    failedAt: timestamp('failed_at', { withTimezone: true }),
+    providerMessageId: text('provider_message_id'),
+    lastError: text('last_error'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('email_outbox_auth_token_unique').on(t.authTokenId).where(sql`${t.authTokenId} IS NOT NULL`),
+    index('email_outbox_dispatch_idx')
+      .on(t.nextAttemptAt)
+      .where(sql`${t.sentAt} IS NULL AND ${t.failedAt} IS NULL`),
+    index('email_outbox_provider_message_idx')
+      .on(t.providerMessageId)
+      .where(sql`${t.providerMessageId} IS NOT NULL`),
+    check(
+      'email_outbox_template_check',
+      sql`${t.template} IN ('verify_email', 'password_reset', 'password_changed')`,
+    ),
   ],
 );
 

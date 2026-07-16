@@ -30,9 +30,7 @@ git clone <your-fork-or-this-repo> echo && cd echo
 docker compose up -d --build
 ```
 
-Compose binds Echo to `127.0.0.1` by default. Open http://localhost:3246, create the initial account, then set `DISABLE_SIGNUP=true` before exposing a private instance through a reverse proxy or by setting `BIND_ADDRESS=0.0.0.0`. Create an API key under **API Keys**, then follow the **Connect** page to wire up your AI apps.
-
-> **Deployment warning:** this version does not verify email ownership. Organization membership is granted to an existing account by email address, so public signups create an unsafe identity boundary for shared/org data. Keep public signups disabled for shared use until email verification or an external trusted identity layer is in place.
+Compose binds Echo to `127.0.0.1` by default. Open http://localhost:3246 and create the initial account. The default `console` email provider prints its verification link in `docker compose logs app`; production deployments should configure Resend before enabling signup. Create an API key under **API Keys**, then follow the **Connect** page to wire up your AI apps.
 
 To enable semantic search, put a provider in `.env` (see `.env.example`) and restart:
 
@@ -40,6 +38,22 @@ To enable semantic search, put a provider in `.env` (see `.env.example`) and res
 EMBEDDINGS_PROVIDER=openai
 OPENAI_API_KEY=sk-...
 ```
+
+### Production email
+
+Echo keeps email delivery behind a provider interface and ships with `console` and `resend` adapters. For Resend, verify a sending domain and set:
+
+```bash
+APP_URL=https://echo.example.com
+EMAIL_PROVIDER=resend
+EMAIL_FROM=Echo <auth@mail.example.com>
+RESEND_API_KEY=re_...
+AUTH_TOKEN_SECRET=<a unique value from: openssl rand -base64 48>
+```
+
+`APP_URL` is the browser URL embedded in email links: use `http://localhost:5173` for Vite development, `http://localhost:3246` for the Docker-built UI, or your public HTTPS URL in production. Resend requires both `APP_URL` and a unique `AUTH_TOKEN_SECRET`.
+
+Signup requires one-time email verification. Password-reset links expire after one hour, revoke every existing dashboard session when used, and trigger a password-change notification. Verification links expire after 24 hours. Delivery uses a transactional database outbox with retries and provider idempotency.
 
 ## Connecting AI apps
 
@@ -118,6 +132,10 @@ Then configure the client (Node.js 20 or newer) with the absolute path to the bu
 | `TRUST_PROXY` | `false` | Behind a reverse proxy |
 | `BIND_ADDRESS` | `127.0.0.1` | Host interface published by Docker Compose |
 | `DISABLE_SIGNUP` | `false` | Lock down a private instance |
+| `EMAIL_PROVIDER` | `console` | `console` for local logs or `resend` for production delivery |
+| `EMAIL_FROM` / `EMAIL_REPLY_TO` | `Echo <onboarding@resend.dev>` / — | Transactional email sender and optional reply address |
+| `RESEND_API_KEY` | — | Resend delivery credential |
+| `AUTH_TOKEN_SECRET` | development-only default | Derives recoverable outbox tokens; production HTTPS deployments require a unique 32+ character value |
 | `EMBEDDINGS_PROVIDER` | `none` | `none` \| `openai` \| `voyage` \| `ollama` |
 | `EMBEDDINGS_MODEL` | provider default | Override the embedding model |
 | `OPENAI_BASE_URL` | `https://api.openai.com/v1` | Optional OpenAI-compatible API base URL |
@@ -161,7 +179,7 @@ docs/API.md         Full REST API reference
 
 ## Hosted vs self-hosted
 
-The same application code can run privately or behind a hosted control plane, but the current build is appropriate only for a private instance or a single trusted identity domain. It has no email verification or invitation proof, while organization membership is assigned by account email. Keep `DISABLE_SIGNUP=true` after provisioning trusted accounts; do not expose open signup for shared/org use until a verified identity layer exists.
+The same application code can run privately or behind a hosted control plane. Public signup is safe only after a production email provider and HTTPS `APP_URL` are configured. Organization membership is granted only to existing verified accounts; Echo still does not send organization invitations, so invite workflows remain a separate hosted-control-plane concern. Private instances can set `DISABLE_SIGNUP=true` after provisioning their users.
 
 ## License
 

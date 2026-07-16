@@ -12,7 +12,7 @@ interface AuthContextValue {
   loading: boolean;
   /** Non-authentication failure from the initial session check. */
   error: unknown;
-  /** Re-fetch /auth/me (e.g. after login/signup). */
+  /** Re-fetch /auth/me (e.g. after login or email verification). */
   refresh: () => Promise<void>;
   logout: () => Promise<void>;
 }

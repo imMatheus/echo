@@ -2,6 +2,7 @@ import type { Db } from './db';
 import type { Config } from './config';
 import type { EmbeddingProvider } from './lib/embeddings';
 import type { FastifyBaseLogger } from 'fastify';
+import type { EmailProvider } from './email/provider';
 
 /** Resolved identity for a request, whether it arrived via session cookie or API key. */
 export interface AuthContext {
@@ -20,5 +21,6 @@ export interface AppContext {
   db: Db;
   config: Config;
   embeddings: EmbeddingProvider | null;
+  email: EmailProvider;
   log: FastifyBaseLogger | Console;
 }

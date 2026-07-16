@@ -6,10 +6,10 @@ Base path: `/api/v1`. All bodies are JSON. All resource JSON uses camelCase and 
 
 Two authentication mechanisms — memory, scope, organization, audit, and stats endpoints accept either unless noted:
 
-1. **Session cookie** (`echo_session`, httpOnly) — set by `POST /auth/login` or `POST /auth/signup`. Used by the dashboard.
+1. **Session cookie** (`echo_session`, httpOnly) — set by `POST /auth/login` or successful `POST /auth/verify-email`. Used by the dashboard.
 2. **API key** — `Authorization: Bearer eck_...` header. Keys are created in the dashboard and act as the user who created them. Used by the MCP server, the stdio bridge, and any integration.
 
-Deployment note: this version does not verify email ownership. Because organization members are selected from existing accounts by email address, keep public signup disabled for shared/org deployments until a trusted identity-verification layer is added.
+Only verified accounts can receive sessions, use API keys, or be added to organizations and scopes.
 
 Errors always look like:
 
@@ -17,7 +17,7 @@ Errors always look like:
 { "error": { "code": "forbidden", "message": "You do not have access to this scope" } }
 ```
 
-Codes: `unauthorized` (401), `forbidden` (403), `not_found` (404), `validation_error` (400), `conflict` (409), `rate_limited` (429), `signup_disabled` (403), `internal_error` (500).
+Codes: `unauthorized` (401), `forbidden` (403), `not_found` (404), `validation_error` (400), `conflict` (409), `rate_limited` (429), `signup_disabled` (403), `email_not_verified` (403), `verification_invalid` (400), `password_reset_invalid` (400), `internal_error` (500).
 
 ## Meta
 
@@ -26,8 +26,12 @@ Codes: `unauthorized` (401), `forbidden` (403), `not_found` (404), `validation_e
 
 ## Auth
 
-- `POST /auth/signup` `{ email, password, name }` → `{ user }` + sets session cookie. 403 `signup_disabled` when `DISABLE_SIGNUP=true`.
+- `POST /auth/signup` `{ email, password, name }` → `{ verificationRequired: true, email }`; queues a 24-hour verification email and does not create a session. 403 `signup_disabled` when `DISABLE_SIGNUP=true`.
+- `POST /auth/verify-email` `{ token }` → `{ user }` + sets session cookie. Tokens are one-time.
+- `POST /auth/resend-verification` `{ email }` → `{ ok: true }`. Always generic; per-address and per-IP rate limits apply.
 - `POST /auth/login` `{ email, password }` → `{ user }` + sets session cookie.
+- `POST /auth/forgot-password` `{ email }` → `{ ok: true }`. Always generic; queues a one-hour reset link for verified accounts.
+- `POST /auth/reset-password` `{ token, password }` → `{ ok: true }`; consumes the token, revokes all sessions, and queues a password-change notification.
 - `POST /auth/logout` → `{ ok: true }` + clears cookie.
 - `GET /auth/me` → `MeResponse` `{ user, personalScopeId }`.
 
@@ -61,7 +65,7 @@ Codes: `unauthorized` (401), `forbidden` (403), `not_found` (404), `validation_e
 - `PATCH /orgs/:id` `{ name }` → `{ org }` — owner only.
 - `DELETE /orgs/:id` → `{ ok: true }` — owner only. Permanently deletes the organization, all of its scopes, their memories, and every membership.
 - `GET /orgs/:id/members` → `{ members: OrgMember[] }` — any member.
-- `POST /orgs/:id/members` `{ email, role? }` → `{ member }` — owner only. The user must already have an Echo account (v1 has no email invites).
+- `POST /orgs/:id/members` `{ email, role? }` → `{ member }` — owner only. The user must already have a verified Echo account (v1 has no email invites).
 - `PATCH /orgs/:id/members/:userId` `{ role }` → `{ member }` — owner only. The last owner cannot be demoted.
 - `DELETE /orgs/:id/members/:userId` → `{ ok: true }` — owner, or yourself (leave). The last owner cannot be removed.
 - `GET /orgs/:id/audit?limit&offset&action` → `AuditListResponse` — owner only; offset max 100,000. Org-scoped events only; personal memories never appear here.

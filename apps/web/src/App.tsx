@@ -13,14 +13,18 @@ import { Toaster } from '@/components/ui/sonner';
 import MemoryDetailModal from './components/MemoryDetailModal';
 import AuditPage from './pages/Audit';
 import ConnectPage from './pages/Connect';
+import CheckEmailPage from './pages/CheckEmail';
 import DashboardPage from './pages/Dashboard';
 import LandingPage from './pages/Landing';
 import LoginPage from './pages/Login';
+import ForgotPasswordPage from './pages/ForgotPassword';
 import MemoriesPage from './pages/Memories';
 import MemoryDetailPage from './pages/MemoryDetail';
 import OrgDetailPage from './pages/OrgDetail';
 import OrgsPage from './pages/Orgs';
 import SignupPage from './pages/Signup';
+import ResetPasswordPage from './pages/ResetPassword';
+import VerifyEmailPage from './pages/VerifyEmail';
 
 function FullScreenLoading() {
   return (
@@ -128,6 +132,10 @@ function AppRoutes() {
         <Route path="/" element={<RootRoute />} />
         <Route path="/login" element={<Page><LoginPage /></Page>} />
         <Route path="/signup" element={<Page><SignupPage /></Page>} />
+        <Route path="/check-email" element={<Page><CheckEmailPage /></Page>} />
+        <Route path="/verify-email" element={<Page><VerifyEmailPage /></Page>} />
+        <Route path="/forgot-password" element={<Page><ForgotPasswordPage /></Page>} />
+        <Route path="/reset-password" element={<Page><ResetPasswordPage /></Page>} />
         <Route
           element={
             <RequireAuth>
