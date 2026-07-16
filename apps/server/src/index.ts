@@ -1,8 +1,7 @@
-import { sql } from 'drizzle-orm';
 import { loadConfig, VERSION } from './config';
 import { sweepMemories } from './core/memories';
 import { processEmailOutbox, sweepAuthEmailData } from './core/email-delivery';
-import { createDb, migrate, type Db } from './db';
+import { createDb } from './db';
 import { createEmbeddingProvider } from './lib/embeddings';
 import { createEmailProvider } from './email/provider';
 import { buildApp } from './http/app';
@@ -10,30 +9,12 @@ import type { AppContext } from './types';
 
 const SWEEP_INTERVAL_MS = 60 * 60 * 1000;
 const EMAIL_DISPATCH_INTERVAL_MS = 10 * 1000;
-const STARTUP_DB_TIMEOUT_MS = 60_000;
-
-async function waitForDb(db: Db, timeoutMs = STARTUP_DB_TIMEOUT_MS): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  let attempt = 0;
-  while (true) {
-    attempt += 1;
-    try {
-      await db.execute(sql`SELECT 1`);
-      return;
-    } catch (err) {
-      const remaining = deadline - Date.now();
-      if (remaining <= 0) throw err;
-      console.log(`waiting for database (attempt ${attempt})...`);
-      await new Promise((resolve) => setTimeout(resolve, Math.min(1000, remaining)));
-    }
-  }
-}
 
 async function main(): Promise<void> {
   const config = loadConfig();
+  // Migrations are NOT run here — apply them explicitly with `bun run db:migrate`.
+  // The pool connects lazily, so startup does not touch the database.
   const db = createDb(config.DATABASE_URL);
-  await waitForDb(db);
-  await migrate(db, (msg) => console.log(msg));
 
   const app: AppContext = {
     db,
