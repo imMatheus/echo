@@ -4,7 +4,11 @@
  */
 function resolveServerUrl(): string {
   const configured = import.meta.env.VITE_SERVER_URL?.trim();
-  const fallback = import.meta.env.DEV ? 'http://localhost:8080' : window.location.origin;
+  // In a browser production build with no override, call back to the serving
+  // origin (the legacy single-process mode). `window` is absent under Vite dev
+  // and in the test runner, so guard it before use and fall back to localhost.
+  const canUseWindowOrigin = !import.meta.env.DEV && typeof window !== 'undefined';
+  const fallback = canUseWindowOrigin ? window.location.origin : 'http://localhost:8080';
   const url = new URL(configured || fallback);
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
     throw new Error('VITE_SERVER_URL must use http:// or https://');
