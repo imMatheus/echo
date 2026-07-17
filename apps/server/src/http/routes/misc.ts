@@ -6,15 +6,10 @@ import { z } from 'zod';
 import { listUserAudit } from '@/core/audit';
 import { getUsageStats } from '@/core/stats';
 import { VERSION } from '@/config';
+import { auditQuery } from '@/lib/schemas';
 import { parse } from '@/lib/validate';
 import type { AppContext } from '@/types';
 import { requireAuth } from '@/http/authn';
-
-const auditQuerySchema = z.object({
-  limit: z.coerce.number().int().min(1).max(200).default(50),
-  offset: z.coerce.number().int().min(0).max(100_000).default(0),
-  action: z.string().trim().min(1).max(64).optional(),
-});
 
 const statsQuerySchema = z.object({
   range: z.enum(STATS_RANGES).default('30d'),
@@ -43,7 +38,7 @@ export function miscRoutes(app: AppContext) {
 
     f.get('/audit', async (req) => {
       const ctx = await requireAuth(app, req);
-      const query = parse(auditQuerySchema, req.query);
+      const query = parse(auditQuery, req.query);
       return listUserAudit(app, ctx.userId, query);
     });
 

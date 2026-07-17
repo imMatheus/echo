@@ -14,21 +14,13 @@ import {
   requireOrgRole,
   updateOrgMemberRole,
 } from '@/core/orgs';
+import { auditQuery, displayName, emailAddress, idParam, memberParam } from '@/lib/schemas';
 import { parse } from '@/lib/validate';
 import type { AppContext } from '@/types';
 import { requireAuth } from '@/http/authn';
 
 const createSchema = z.object({
-  name: z.string().trim().min(1).max(100),
-});
-
-const idParam = z.object({ id: z.string().uuid() });
-const memberParam = z.object({ id: z.string().uuid(), userId: z.string().uuid() });
-
-const auditQuerySchema = z.object({
-  limit: z.coerce.number().int().min(1).max(200).default(50),
-  offset: z.coerce.number().int().min(0).max(100_000).default(0),
-  action: z.string().trim().min(1).max(64).optional(),
+  name: displayName,
 });
 
 export function orgRoutes(app: AppContext) {
@@ -55,7 +47,7 @@ export function orgRoutes(app: AppContext) {
     f.patch('/orgs/:id', async (req) => {
       const ctx = await requireAuth(app, req);
       const { id } = parse(idParam, req.params);
-      const { name } = parse(z.object({ name: z.string().trim().min(1).max(100) }), req.body);
+      const { name } = parse(z.object({ name: displayName }), req.body);
       return { org: await renameOrg(app, ctx, id, name) };
     });
 
@@ -77,7 +69,7 @@ export function orgRoutes(app: AppContext) {
       const { id } = parse(idParam, req.params);
       const body = parse(
         z.object({
-          email: z.string().trim().email().max(254),
+          email: emailAddress,
           role: z.enum(ORG_ROLES).default('member'),
         }),
         req.body,
@@ -105,7 +97,7 @@ export function orgRoutes(app: AppContext) {
       const ctx = await requireAuth(app, req);
       const { id } = parse(idParam, req.params);
       await requireOrgRole(app, id, ctx.userId, ['owner']);
-      const query = parse(auditQuerySchema, req.query);
+      const query = parse(auditQuery, req.query);
       return listOrgAudit(app, id, query);
     });
   };
