@@ -29,25 +29,11 @@ import { TableSkeleton } from '@/components/Skeletons';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CHART_COLORS, solidTileStyle } from '@/lib/chart-colors';
 import { cn } from '@/lib/utils';
@@ -69,20 +55,25 @@ const MCP_TOOLS = [
     icon: ListIcon,
   },
   { name: 'forget_context', description: 'Delete a memory by id.', icon: Trash2Icon },
-  { name: 'list_scopes', description: 'List the scopes the key can read and write.', icon: LayersIcon },
+  {
+    name: 'list_scopes',
+    description: 'List the scopes the key can read and write.',
+    icon: LayersIcon,
+  },
 ];
 
 const INLINE_CODE = 'rounded bg-muted px-1 py-px font-mono text-[0.7rem]';
 
 const BRIDGE_PATH = '/absolute/path/to/echo/packages/mcp-bridge/dist/index.js';
-const BRIDGE_BUILD = [
-  'cd /absolute/path/to/echo',
-  'bun install',
-  'bun run --filter echo-context-mcp build',
-].join('\n');
+const BRIDGE_BUILD = ['cd /absolute/path/to/echo', 'bun install', 'bun run --filter echo-context-mcp build'].join('\n');
 
 /** One entry in the numbered setup rail. */
-function Step({ number, title, description, children }: {
+function Step({
+  number,
+  title,
+  description,
+  children,
+}: {
   number: number;
   title: string;
   description?: ReactNode;
@@ -139,11 +130,8 @@ export default function ConnectPage() {
   const serverOrigin = SERVER_URL;
   const serverUrl = new URL(serverOrigin);
   const localHostnames = new Set(['localhost', '127.0.0.1', '::1']);
-  const needsPublicConnectorUrl =
-    serverUrl.protocol !== 'https:' || localHostnames.has(serverUrl.hostname);
-  const chatGptEndpoint = needsPublicConnectorUrl
-    ? 'https://your-public-echo.example.com/mcp'
-    : MCP_URL;
+  const needsPublicConnectorUrl = serverUrl.protocol !== 'https:' || localHostnames.has(serverUrl.hostname);
+  const chatGptEndpoint = needsPublicConnectorUrl ? 'https://your-public-echo.example.com/mcp' : MCP_URL;
 
   // PlanetScale-style: once a key is generated its real value is dropped straight
   // into every copy-paste snippet; otherwise we show the placeholder to edit.
@@ -205,8 +193,8 @@ export default function ConnectPage() {
                 <TriangleAlertIcon />
                 <AlertTitle>Copy your key now</AlertTitle>
                 <AlertDescription className="text-warning/90">
-                  This is the only time the full key is shown. It's already filled into the setup snippet
-                  below — copy that, or grab the raw key here. Echo keeps only a hashed version.
+                  This is the only time the full key is shown. It's already filled into the setup snippet below — copy
+                  that, or grab the raw key here. Echo keeps only a hashed version.
                 </AlertDescription>
               </Alert>
               <Labeled
@@ -240,15 +228,14 @@ export default function ConnectPage() {
           description={
             hasKey ? (
               <>
-                Pick your app below — your new key is already filled into each snippet. For stdio clients,
-                replace <code className={INLINE_CODE}>/absolute/path/to/echo</code> with your checkout's
-                absolute path.
+                Pick your app below — your new key is already filled into each snippet. For stdio clients, replace{' '}
+                <code className={INLINE_CODE}>/absolute/path/to/echo</code> with your checkout's absolute path.
               </>
             ) : (
               <>
-                Pick your app below, then replace <code className={INLINE_CODE}>YOUR_API_KEY</code> with the
-                key from step 1. For stdio clients, also replace{' '}
-                <code className={INLINE_CODE}>/absolute/path/to/echo</code> with your checkout's absolute path.
+                Pick your app below, then replace <code className={INLINE_CODE}>YOUR_API_KEY</code> with the key from
+                step 1. For stdio clients, also replace <code className={INLINE_CODE}>/absolute/path/to/echo</code> with
+                your checkout's absolute path.
               </>
             )
           }
@@ -274,8 +261,7 @@ export default function ConnectPage() {
 
             <TabsContent value="claude-desktop" className="flex flex-col gap-3.5 pt-1.5">
               <p className="max-w-prose text-muted-foreground">
-                Claude Desktop only speaks stdio, so it connects through the local bridge included in the Echo
-                repo.
+                Claude Desktop only speaks stdio, so it connects through the local bridge included in the Echo repo.
               </p>
               <BridgeBuildBlock />
               <Labeled
@@ -323,17 +309,17 @@ export default function ConnectPage() {
 
             <TabsContent value="chatgpt" className="flex flex-col gap-3.5 pt-1.5">
               <p className="max-w-prose text-muted-foreground">
-                In ChatGPT, enable developer mode in settings, then add a remote MCP connector pointing at your
-                Echo endpoint. Authenticate with your API key as a bearer token.
+                In ChatGPT, enable developer mode in settings, then add a remote MCP connector pointing at your Echo
+                endpoint. Authenticate with your API key as a bearer token.
               </p>
               {needsPublicConnectorUrl && (
                 <Alert>
                   <CircleAlertIcon />
                   <AlertTitle>Use a publicly reachable HTTPS URL</AlertTitle>
                   <AlertDescription>
-                    The current server address {serverOrigin} is local or non-HTTPS and cannot be used as a remote connector
-                    endpoint. Deploy Echo behind HTTPS, keep public signup disabled, and replace the example host
-                    below with that deployment.
+                    The current server address {serverOrigin} is local or non-HTTPS and cannot be used as a remote
+                    connector endpoint. Deploy Echo behind HTTPS, keep public signup disabled, and replace the example
+                    host below with that deployment.
                   </AlertDescription>
                 </Alert>
               )}
@@ -347,8 +333,8 @@ export default function ConnectPage() {
 
             <TabsContent value="other" className="flex flex-col gap-3.5 pt-1.5">
               <p className="max-w-prose text-muted-foreground">
-                Echo speaks Streamable HTTP MCP — point any compatible client at the endpoint and pass your key
-                as a bearer token.
+                Echo speaks Streamable HTTP MCP — point any compatible client at the endpoint and pass your key as a
+                bearer token.
               </p>
               <Labeled label="Endpoint">
                 <CodeBlock code={MCP_URL} />
@@ -402,12 +388,7 @@ export default function ConnectPage() {
         </ul>
         {meta && (
           <div className="mt-5 flex items-start gap-2 rounded-lg border bg-muted/20 px-3.5 py-2.5 text-xs/relaxed text-muted-foreground">
-            <span
-              className={cn(
-                'mt-1 size-2 shrink-0 rounded-full',
-                meta.embeddings ? 'bg-success' : 'bg-warning',
-              )}
-            />
+            <span className={cn('mt-1 size-2 shrink-0 rounded-full', meta.embeddings ? 'bg-success' : 'bg-warning')} />
             <span>
               {meta.embeddings ? (
                 <>
@@ -417,8 +398,7 @@ export default function ConnectPage() {
               ) : (
                 <>
                   <code className={INLINE_CODE}>recall_context</code> is keyword-only right now — set{' '}
-                  <code className={INLINE_CODE}>EMBEDDINGS_PROVIDER</code> on the server to enable semantic
-                  search.
+                  <code className={INLINE_CODE}>EMBEDDINGS_PROVIDER</code> on the server to enable semantic search.
                 </>
               )}
             </span>
@@ -431,8 +411,8 @@ export default function ConnectPage() {
           <div>
             <h2 className="font-heading text-sm font-medium">Your API keys</h2>
             <p className="mt-0.5 max-w-prose text-xs/relaxed text-muted-foreground">
-              Every key here can read and write your memories over MCP. Revoke any you no longer use — apps
-              using it lose access immediately.
+              Every key here can read and write your memories over MCP. Revoke any you no longer use — apps using it
+              lose access immediately.
             </p>
           </div>
           <Button size="sm" className="shrink-0" onClick={() => setShowCreate(true)}>
@@ -533,8 +513,8 @@ export default function ConnectPage() {
           title="Revoke API key?"
           message={
             <>
-              Apps using <strong>{revokeTarget.name}</strong> ({revokeTarget.keyPrefix}) will immediately lose
-              access. This cannot be undone.
+              Apps using <strong>{revokeTarget.name}</strong> ({revokeTarget.keyPrefix}) will immediately lose access.
+              This cannot be undone.
             </>
           }
           confirmLabel="Revoke key"
@@ -581,11 +561,7 @@ function CreateKeyModal({
   };
 
   return (
-    <Dialog
-      open
-      disablePointerDismissal={pending}
-      onOpenChange={(open) => !open && !pending && onClose()}
-    >
+    <Dialog open disablePointerDismissal={pending} onOpenChange={(open) => !open && !pending && onClose()}>
       <DialogContent showCloseButton={!pending}>
         <DialogHeader>
           <DialogTitle>Create API key</DialogTitle>

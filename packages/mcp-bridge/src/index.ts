@@ -125,7 +125,9 @@ async function api<T>(method: HttpMethod, path: string, schema: z.ZodType<T>, bo
   }
   if (!res.ok) {
     const error = errorResponseSchema.safeParse(json);
-    throw new EchoApiError(error.success ? error.data.error.message : `Echo API error ${res.status}: ${text.slice(0, 200)}`);
+    throw new EchoApiError(
+      error.success ? error.data.error.message : `Echo API error ${res.status}: ${text.slice(0, 200)}`,
+    );
   }
   const parsed = schema.safeParse(json);
   if (!parsed.success) {
@@ -211,8 +213,13 @@ server.tool(
   'Store a durable fact in Echo so it can be recalled across conversations and AI apps. Call this when the user explicitly asks to remember or save something, or when a stable, useful fact about the user, their preferences, team, or project would clearly improve future work. Use kind="explicit" for facts the user stated or asked to save; use kind="inferred" only for genuine deductions and record an honest confidence. Do not store secrets, credentials, sensitive authentication data, unsupported guesses, or trivial and short-lived conversation details; default to the personal scope unless shared team or organization context is clearly intended.',
   {
     content: nonBlank(10_000).describe('The memory itself, as a self-contained statement.'),
-    scope: scopeSelector.optional().describe('"personal" (default), a scope name (e.g. "Acme/Platform Team"), or a scope id from list_scopes.'),
-    kind: z.enum(['explicit', 'inferred']).optional().describe('"explicit" if the user asked to remember this; "inferred" if you deduced it.'),
+    scope: scopeSelector
+      .optional()
+      .describe('"personal" (default), a scope name (e.g. "Acme/Platform Team"), or a scope id from list_scopes.'),
+    kind: z
+      .enum(['explicit', 'inferred'])
+      .optional()
+      .describe('"explicit" if the user asked to remember this; "inferred" if you deduced it.'),
     confidence: z.number().min(0).max(1).optional().describe('How certain this fact is, 0-1.'),
     sensitivity: z.enum(['low', 'normal', 'high']).optional(),
     tags: tags.optional().describe('Short topical tags, normalized to lowercase by Echo.'),

@@ -62,10 +62,7 @@ function AuthErrorScreen({ error, retry }: { error: unknown; retry: () => Promis
   );
 }
 
-class PageErrorBoundary extends Component<
-  { children: ReactNode },
-  { error: unknown; hasError: boolean }
-> {
+class PageErrorBoundary extends Component<{ children: ReactNode }, { error: unknown; hasError: boolean }> {
   state = { error: null as unknown, hasError: false };
 
   static getDerivedStateFromError(error: unknown) {
@@ -93,11 +90,7 @@ class PageErrorBoundary extends Component<
 
 function Page({ children }: { children: ReactNode }) {
   const { pathname } = useLocation();
-  return (
-    <PageErrorBoundary key={pathname}>
-      {children}
-    </PageErrorBoundary>
-  );
+  return <PageErrorBoundary key={pathname}>{children}</PageErrorBoundary>;
 }
 
 function ProtectedArea() {
@@ -126,24 +119,120 @@ function AppRoutes() {
   return (
     <>
       <Routes location={background ?? location}>
-        <Route path="/" element={<Page><LandingPage /></Page>} />
-        <Route path="/login" element={<Page><LoginPage /></Page>} />
-        <Route path="/signup" element={<Page><SignupPage /></Page>} />
-        <Route path="/check-email" element={<Page><CheckEmailPage /></Page>} />
-        <Route path="/verify-email" element={<Page><VerifyEmailPage /></Page>} />
-        <Route path="/forgot-password" element={<Page><ForgotPasswordPage /></Page>} />
-        <Route path="/reset-password" element={<Page><ResetPasswordPage /></Page>} />
         <Route
-          element={<ProtectedArea />}
-        >
-          <Route path="/dashboard" element={<Page><DashboardPage /></Page>} />
-          <Route path="/memories" element={<Page><MemoriesPage /></Page>} />
-          <Route path="/memories/:id" element={<Page><MemoryDetailPage /></Page>} />
+          path="/"
+          element={
+            <Page>
+              <LandingPage />
+            </Page>
+          }
+        />
+        <Route
+          path="/login"
+          element={
+            <Page>
+              <LoginPage />
+            </Page>
+          }
+        />
+        <Route
+          path="/signup"
+          element={
+            <Page>
+              <SignupPage />
+            </Page>
+          }
+        />
+        <Route
+          path="/check-email"
+          element={
+            <Page>
+              <CheckEmailPage />
+            </Page>
+          }
+        />
+        <Route
+          path="/verify-email"
+          element={
+            <Page>
+              <VerifyEmailPage />
+            </Page>
+          }
+        />
+        <Route
+          path="/forgot-password"
+          element={
+            <Page>
+              <ForgotPasswordPage />
+            </Page>
+          }
+        />
+        <Route
+          path="/reset-password"
+          element={
+            <Page>
+              <ResetPasswordPage />
+            </Page>
+          }
+        />
+        <Route element={<ProtectedArea />}>
+          <Route
+            path="/dashboard"
+            element={
+              <Page>
+                <DashboardPage />
+              </Page>
+            }
+          />
+          <Route
+            path="/memories"
+            element={
+              <Page>
+                <MemoriesPage />
+              </Page>
+            }
+          />
+          <Route
+            path="/memories/:id"
+            element={
+              <Page>
+                <MemoryDetailPage />
+              </Page>
+            }
+          />
           <Route path="/keys" element={<Navigate to="/connect" replace />} />
-          <Route path="/audit" element={<Page><AuditPage /></Page>} />
-          <Route path="/orgs" element={<Page><OrgsPage /></Page>} />
-          <Route path="/orgs/:id" element={<Page><OrgDetailPage /></Page>} />
-          <Route path="/connect" element={<Page><ConnectPage /></Page>} />
+          <Route
+            path="/audit"
+            element={
+              <Page>
+                <AuditPage />
+              </Page>
+            }
+          />
+          <Route
+            path="/orgs"
+            element={
+              <Page>
+                <OrgsPage />
+              </Page>
+            }
+          />
+          <Route
+            path="/orgs/:id"
+            element={
+              <Page>
+                <OrgDetailPage />
+              </Page>
+            }
+          />
+          <Route
+            path="/connect"
+            element={
+              <Page>
+                <ConnectPage />
+              </Page>
+            }
+          />
         </Route>
         {/* Unknown paths fall back to "/" — landing when signed out, /dashboard when signed in. */}
         <Route path="*" element={<Navigate to="/" replace />} />
@@ -151,7 +240,14 @@ function AppRoutes() {
 
       {background && (
         <Routes>
-          <Route path="/memories/:id" element={<Page><MemoryDetailModal /></Page>} />
+          <Route
+            path="/memories/:id"
+            element={
+              <Page>
+                <MemoryDetailModal />
+              </Page>
+            }
+          />
         </Routes>
       )}
     </>

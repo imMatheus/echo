@@ -35,9 +35,8 @@ export default function LandingPage() {
             Give your AI tools a shared memory.
           </h1>
           <p className="max-w-xl text-pretty text-sm/relaxed text-muted-foreground">
-            Echo is a self-hosted memory layer for AI apps. Claude, Cursor, and any MCP-compatible
-            tool can save what they learn and recall it later — scoped to you, your team, or your
-            whole organization.
+            Echo is a self-hosted memory layer for AI apps. Claude, Cursor, and any MCP-compatible tool can save what
+            they learn and recall it later — scoped to you, your team, or your whole organization.
           </p>
           <div className="mt-1 flex items-center gap-2">
             <Link to="/signup" className={cn(buttonVariants({ size: 'lg' }))}>
@@ -98,9 +97,7 @@ function DemoCard({ label, children }: { label: string; children: ReactNode }) {
         {children}
       </div>
       <div className="px-2 pt-2.5 pb-1.5">
-        <span className="font-mono text-[10px] font-medium uppercase tracking-wider text-grayscale-9">
-          {label}
-        </span>
+        <span className="font-mono text-[10px] font-medium uppercase tracking-wider text-grayscale-9">{label}</span>
       </div>
     </div>
   );

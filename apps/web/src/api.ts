@@ -257,10 +257,9 @@ export function addScopeMember(scopeId: string, email: string): Promise<{ member
 }
 
 export function removeScopeMember(scopeId: string, userId: string): Promise<{ ok: true }> {
-  return request<{ ok: true }>(
-    `/scopes/${encodeURIComponent(scopeId)}/members/${encodeURIComponent(userId)}`,
-    { method: 'DELETE' },
-  );
+  return request<{ ok: true }>(`/scopes/${encodeURIComponent(scopeId)}/members/${encodeURIComponent(userId)}`, {
+    method: 'DELETE',
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -294,10 +293,7 @@ export function listOrgMembers(orgId: string): Promise<{ members: OrgMember[] }>
   return request<{ members: OrgMember[] }>(`/orgs/${encodeURIComponent(orgId)}/members`);
 }
 
-export function addOrgMember(
-  orgId: string,
-  body: { email: string; role?: OrgRole },
-): Promise<{ member: OrgMember }> {
+export function addOrgMember(orgId: string, body: { email: string; role?: OrgRole }): Promise<{ member: OrgMember }> {
   return request<{ member: OrgMember }>(`/orgs/${encodeURIComponent(orgId)}/members`, {
     method: 'POST',
     body,
@@ -309,17 +305,16 @@ export function updateOrgMember(
   userId: string,
   body: { role: OrgRole },
 ): Promise<{ member: OrgMember }> {
-  return request<{ member: OrgMember }>(
-    `/orgs/${encodeURIComponent(orgId)}/members/${encodeURIComponent(userId)}`,
-    { method: 'PATCH', body },
-  );
+  return request<{ member: OrgMember }>(`/orgs/${encodeURIComponent(orgId)}/members/${encodeURIComponent(userId)}`, {
+    method: 'PATCH',
+    body,
+  });
 }
 
 export function removeOrgMember(orgId: string, userId: string): Promise<{ ok: true }> {
-  return request<{ ok: true }>(
-    `/orgs/${encodeURIComponent(orgId)}/members/${encodeURIComponent(userId)}`,
-    { method: 'DELETE' },
-  );
+  return request<{ ok: true }>(`/orgs/${encodeURIComponent(orgId)}/members/${encodeURIComponent(userId)}`, {
+    method: 'DELETE',
+  });
 }
 
 export interface AuditQuery {

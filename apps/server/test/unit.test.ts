@@ -80,13 +80,10 @@ describe('email authentication tokens', () => {
 describe('email providers and templates', () => {
   it('sends Resend API requests with provider idempotency', async () => {
     const requests: Request[] = [];
-    const provider = new ResendEmailProvider(
-      { RESEND_API_KEY: 're_test' },
-      (async (input, init) => {
-        requests.push(new Request(input, init));
-        return Response.json({ id: 'email_123' });
-      }) as typeof fetch,
-    );
+    const provider = new ResendEmailProvider({ RESEND_API_KEY: 're_test' }, (async (input, init) => {
+      requests.push(new Request(input, init));
+      return Response.json({ id: 'email_123' });
+    }) as typeof fetch);
     const result = await provider.send({
       to: 'user@example.com',
       from: 'Echo <auth@example.com>',
@@ -129,11 +126,7 @@ describe('toVectorLiteral', () => {
 
 describe('tag normalization', () => {
   it('trims, lowercases, removes blanks, and preserves first occurrence order', () => {
-    expect(normalizeTags([' Work ', 'TEAM', 'work', ' ', 'Team', 'personal'])).toEqual([
-      'work',
-      'team',
-      'personal',
-    ]);
+    expect(normalizeTags([' Work ', 'TEAM', 'work', ' ', 'Team', 'personal'])).toEqual(['work', 'team', 'personal']);
   });
 });
 
@@ -219,7 +212,8 @@ describe('configuration', () => {
   });
 
   it('passes a configured external database URL through unchanged', () => {
-    const databaseUrl = 'postgresql://app.branch:pscale_pw_secret@demo-useast1-1.horizon.psdb.cloud:5432/echo?sslmode=require';
+    const databaseUrl =
+      'postgresql://app.branch:pscale_pw_secret@demo-useast1-1.horizon.psdb.cloud:5432/echo?sslmode=require';
     expect(loadConfig({ DATABASE_URL: databaseUrl }).DATABASE_URL).toBe(databaseUrl);
   });
 
@@ -338,7 +332,9 @@ describe('post-migration index maintenance', () => {
     expect(invalidDrop).toBeGreaterThanOrEqual(0);
     expect(invalidDrop).toBeLessThan(recoveredCreate);
 
-    const lastCreate = Math.max(...CONCURRENT_INDEXES.map((index) => calls.findIndex((call) => call.text === index.sql)));
+    const lastCreate = Math.max(
+      ...CONCURRENT_INDEXES.map((index) => calls.findIndex((call) => call.text === index.sql)),
+    );
     const firstLegacyDrop = calls.findIndex(
       (call) => call.text.includes('DROP INDEX CONCURRENTLY') && call.text.includes(LEGACY_INDEXES[0]),
     );

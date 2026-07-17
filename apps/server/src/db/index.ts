@@ -64,10 +64,9 @@ export async function migrate(db: Db, log: (msg: string) => void = () => {}): Pr
     // where a blocking acquire would hang every subsequent boot forever.
     const deadline = Date.now() + MIGRATION_LOCK_TIMEOUT_MS;
     while (true) {
-      const result = await client.query<{ locked: boolean }>(
-        'SELECT pg_try_advisory_lock($1::bigint) AS locked',
-        [MIGRATION_LOCK_KEY],
-      );
+      const result = await client.query<{ locked: boolean }>('SELECT pg_try_advisory_lock($1::bigint) AS locked', [
+        MIGRATION_LOCK_KEY,
+      ]);
       if (result.rows[0]?.locked === true) {
         locked = true;
         break;

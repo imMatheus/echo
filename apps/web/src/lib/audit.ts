@@ -192,18 +192,12 @@ export function detailSummary(entry: AuditEntry): string | null {
     case 'memory.recall': {
       const query = asString(d.query);
       const count = asNumber(d.count);
-      return joinParts([
-        query && `“${query}”`,
-        count !== null ? counted(count, 'result') : null,
-        asString(d.mode),
-      ]);
+      return joinParts([query && `“${query}”`, count !== null ? counted(count, 'result') : null, asString(d.mode)]);
     }
     case 'memory.list': {
       const count = asNumber(d.count);
       const filters =
-        d.filters && typeof d.filters === 'object'
-          ? Object.values(d.filters).filter((v) => v != null).length
-          : 0;
+        d.filters && typeof d.filters === 'object' ? Object.values(d.filters).filter((v) => v != null).length : 0;
       return joinParts([count !== null ? counted(count, 'result') : null, filters > 0 ? 'filtered' : null]);
     }
     case 'apikey.create': {

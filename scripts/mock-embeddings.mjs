@@ -11,7 +11,10 @@ const heldSlowResponses = [];
 function embed(text) {
   const dimensions = text.includes(SHORT_DIM_MARKER) ? 8 : DIM;
   const v = new Array(dimensions).fill(0);
-  for (const word of text.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean)) {
+  for (const word of text
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean)) {
     let h = 0;
     for (const ch of word) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
     v[h % dimensions] += 1;

@@ -75,10 +75,7 @@ export async function buildApp(app: AppContext): Promise<FastifyInstance> {
       const contentType = String(reply.getHeader('content-type') ?? '');
       const isFingerprintedAsset =
         reply.statusCode < 400 && requestPath.startsWith('/assets/') && !contentType.startsWith('text/html');
-      reply.header(
-        'cache-control',
-        isFingerprintedAsset ? 'public, max-age=31536000, immutable' : 'no-cache',
-      );
+      reply.header('cache-control', isFingerprintedAsset ? 'public, max-age=31536000, immutable' : 'no-cache');
     }
     return payload;
   });

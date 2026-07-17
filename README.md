@@ -97,28 +97,28 @@ Then configure the client (Node.js 20 or newer) with the absolute path to the bu
 
 ### MCP tools
 
-| Tool | What it does |
-| --- | --- |
+| Tool               | What it does                                                                      |
+| ------------------ | --------------------------------------------------------------------------------- |
 | `remember_context` | Store a memory (explicit or inferred, with confidence, tags, sensitivity, expiry) |
-| `recall_context` | Hybrid semantic search across every scope you can read |
-| `list_context` | Browse memories chronologically |
-| `forget_context` | Delete a memory by id |
-| `list_scopes` | List accessible scopes, for deciding where shared knowledge belongs |
+| `recall_context`   | Hybrid semantic search across every scope you can read                            |
+| `list_context`     | Browse memories chronologically                                                   |
+| `forget_context`   | Delete a memory by id                                                             |
+| `list_scopes`      | List accessible scopes, for deciding where shared knowledge belongs               |
 
 ## The memory model
 
 ```jsonc
 {
   "content": "BigQuery table analytics.events_v3 is the canonical event stream; _v2 is deprecated",
-  "scopeId": "…",            // personal | organization | workspace | team | project scope
-  "kind": "explicit",        // explicit (user asked) vs inferred (model deduced)
-  "confidence": 1,           // 0..1
-  "sensitivity": "normal",   // low | normal | high
-  "sourceApp": "claude-code",// which app wrote it
+  "scopeId": "…", // personal | organization | workspace | team | project scope
+  "kind": "explicit", // explicit (user asked) vs inferred (model deduced)
+  "confidence": 1, // 0..1
+  "sensitivity": "normal", // low | normal | high
+  "sourceApp": "claude-code", // which app wrote it
   "tags": ["bigquery", "analytics"],
-  "expiresAt": null,         // optional auto-expiry
-  "createdBy": "…",          // user provenance
-  "embeddingModel": "openai:text-embedding-3-small"
+  "expiresAt": null, // optional auto-expiry
+  "createdBy": "…", // user provenance
+  "embeddingModel": "openai:text-embedding-3-small",
 }
 ```
 
@@ -126,26 +126,26 @@ Then configure the client (Node.js 20 or newer) with the absolute path to the bu
 
 ## Configuration
 
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `DATABASE_URL` | empty: local Postgres | The only database connection setting. Empty uses the local Docker database; set it to any external PostgreSQL URL to use that database. |
-| `PORT` / `HOST` | `8080` / `0.0.0.0` | Listen address |
-| `APP_URL` | — | Public URL; https enables Secure cookies |
-| `TRUST_PROXY` | `false` | Behind a reverse proxy |
-| `BIND_ADDRESS` | `127.0.0.1` | Host interface published by Docker Compose |
-| `WEB_ORIGIN` | `http://localhost:5173` | The one browser origin allowed to make credentialed API requests |
-| `COOKIE_SAME_SITE` | `lax` | Session-cookie policy; use `none` only for HTTPS cross-site deployments |
-| `DISABLE_SIGNUP` | `false` | Lock down a private instance |
-| `EMAIL_PROVIDER` | `console` | `console` for local logs or `resend` for production delivery |
-| `EMAIL_FROM` / `EMAIL_REPLY_TO` | `Echo <onboarding@resend.dev>` / — | Transactional email sender and optional reply address |
-| `RESEND_API_KEY` | — | Resend delivery credential |
-| `AUTH_TOKEN_SECRET` | development-only default | Derives recoverable outbox tokens; production HTTPS deployments require a unique 32+ character value |
-| `EMBEDDINGS_PROVIDER` | `none` | `none` \| `openai` \| `voyage` \| `ollama` |
-| `EMBEDDINGS_MODEL` | provider default | Override the embedding model |
-| `OPENAI_BASE_URL` | `https://api.openai.com/v1` | Optional OpenAI-compatible API base URL |
-| `OPENAI_API_KEY` / `VOYAGE_API_KEY` / `OLLAMA_URL` | — | Provider credentials |
-| `SESSION_TTL_DAYS` | `30` | Dashboard session lifetime |
-| `STATIC_DIR` | auto | Optional legacy path for serving a dashboard from the API process; split deployments do not use it |
+| Variable                                           | Default                            | Purpose                                                                                                                                 |
+| -------------------------------------------------- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                                     | empty: local Postgres              | The only database connection setting. Empty uses the local Docker database; set it to any external PostgreSQL URL to use that database. |
+| `PORT` / `HOST`                                    | `8080` / `0.0.0.0`                 | Listen address                                                                                                                          |
+| `APP_URL`                                          | —                                  | Public URL; https enables Secure cookies                                                                                                |
+| `TRUST_PROXY`                                      | `false`                            | Behind a reverse proxy                                                                                                                  |
+| `BIND_ADDRESS`                                     | `127.0.0.1`                        | Host interface published by Docker Compose                                                                                              |
+| `WEB_ORIGIN`                                       | `http://localhost:5173`            | The one browser origin allowed to make credentialed API requests                                                                        |
+| `COOKIE_SAME_SITE`                                 | `lax`                              | Session-cookie policy; use `none` only for HTTPS cross-site deployments                                                                 |
+| `DISABLE_SIGNUP`                                   | `false`                            | Lock down a private instance                                                                                                            |
+| `EMAIL_PROVIDER`                                   | `console`                          | `console` for local logs or `resend` for production delivery                                                                            |
+| `EMAIL_FROM` / `EMAIL_REPLY_TO`                    | `Echo <onboarding@resend.dev>` / — | Transactional email sender and optional reply address                                                                                   |
+| `RESEND_API_KEY`                                   | —                                  | Resend delivery credential                                                                                                              |
+| `AUTH_TOKEN_SECRET`                                | development-only default           | Derives recoverable outbox tokens; production HTTPS deployments require a unique 32+ character value                                    |
+| `EMBEDDINGS_PROVIDER`                              | `none`                             | `none` \| `openai` \| `voyage` \| `ollama`                                                                                              |
+| `EMBEDDINGS_MODEL`                                 | provider default                   | Override the embedding model                                                                                                            |
+| `OPENAI_BASE_URL`                                  | `https://api.openai.com/v1`        | Optional OpenAI-compatible API base URL                                                                                                 |
+| `OPENAI_API_KEY` / `VOYAGE_API_KEY` / `OLLAMA_URL` | —                                  | Provider credentials                                                                                                                    |
+| `SESSION_TTL_DAYS`                                 | `30`                               | Dashboard session lifetime                                                                                                              |
+| `STATIC_DIR`                                       | auto                               | Optional legacy path for serving a dashboard from the API process; split deployments do not use it                                      |
 
 All server settings belong in `apps/server/.env`. The only web setting belongs in `apps/web/.env`: `VITE_SERVER_URL`. Leave `DATABASE_URL` empty for the local Docker database. Set it once to an external PostgreSQL connection string when deploying or when you want local development to use that provider; every server path uses the same value.
 

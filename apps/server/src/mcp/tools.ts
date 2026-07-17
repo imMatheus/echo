@@ -60,13 +60,45 @@ export function buildMcpServer(app: AppContext, ctx: AuthContext): McpServer {
     'remember_context',
     'Store a durable fact in Echo so it can be recalled across conversations and AI apps. Call this when the user explicitly asks to remember or save something, or when a stable, useful fact about the user, their preferences, team, or project would clearly improve future work. Use kind="explicit" for facts the user stated or asked to save; use kind="inferred" only for genuine deductions and record an honest confidence. Do not store secrets, credentials, sensitive authentication data, unsupported guesses, or trivial and short-lived conversation details; default to the personal scope unless shared team or organization context is clearly intended.',
     {
-      content: z.string().trim().min(1).max(10_000).describe('The memory itself, as a self-contained statement (e.g. "Prefers TypeScript with strict mode for new projects").'),
-      scope: scopeSelector.optional().describe('Where to store it: "personal" (default), a scope name (e.g. "Acme" or "Acme/Platform Team"), or a scope id from list_scopes. Use org/team scopes only for knowledge the whole group should share.'),
-      kind: z.enum(['explicit', 'inferred']).optional().describe('"explicit" if the user asked to remember this; "inferred" if you deduced it. Default explicit.'),
-      confidence: z.number().min(0).max(1).optional().describe('How certain this fact is, 0-1. Use 1 for explicit user statements.'),
-      sensitivity: z.enum(['low', 'normal', 'high']).optional().describe('Mark "high" for health, financial, or otherwise delicate information.'),
-      tags: z.array(z.string().trim().min(1).max(64)).max(20).optional().describe('Short topical tags, normalized to lowercase (e.g. ["preferences", "tooling"]).'),
-      expires_in_days: z.number().int().min(1).max(3650).optional().describe('Auto-expire after N days, for facts that go stale (e.g. "currently traveling").'),
+      content: z
+        .string()
+        .trim()
+        .min(1)
+        .max(10_000)
+        .describe(
+          'The memory itself, as a self-contained statement (e.g. "Prefers TypeScript with strict mode for new projects").',
+        ),
+      scope: scopeSelector
+        .optional()
+        .describe(
+          'Where to store it: "personal" (default), a scope name (e.g. "Acme" or "Acme/Platform Team"), or a scope id from list_scopes. Use org/team scopes only for knowledge the whole group should share.',
+        ),
+      kind: z
+        .enum(['explicit', 'inferred'])
+        .optional()
+        .describe('"explicit" if the user asked to remember this; "inferred" if you deduced it. Default explicit.'),
+      confidence: z
+        .number()
+        .min(0)
+        .max(1)
+        .optional()
+        .describe('How certain this fact is, 0-1. Use 1 for explicit user statements.'),
+      sensitivity: z
+        .enum(['low', 'normal', 'high'])
+        .optional()
+        .describe('Mark "high" for health, financial, or otherwise delicate information.'),
+      tags: z
+        .array(z.string().trim().min(1).max(64))
+        .max(20)
+        .optional()
+        .describe('Short topical tags, normalized to lowercase (e.g. ["preferences", "tooling"]).'),
+      expires_in_days: z
+        .number()
+        .int()
+        .min(1)
+        .max(3650)
+        .optional()
+        .describe('Auto-expire after N days, for facts that go stale (e.g. "currently traveling").'),
     },
     async (args) =>
       run(async () => {
@@ -92,7 +124,9 @@ export function buildMcpServer(app: AppContext, ctx: AuthContext): McpServer {
     'Search Echo for relevant stored context. Call this before answering any question whose answer may depend on user-specific facts, including identity, relationships, location, preferences, personal history, prior decisions, team knowledge, or project conventions; also call it at the start of a task when saved context could change the result. Use a focused natural-language query describing the facts you need, and prefer this tool over list_context for targeted lookup. Treat an empty result as "no matching memory found," not proof that the fact is false, and do not invent details beyond the returned memories.',
     {
       query: z.string().trim().min(1).max(1000).describe('Natural-language description of what context you need.'),
-      scope: scopeSelector.optional().describe('Restrict to one scope by name or id. Default: all scopes the user can access.'),
+      scope: scopeSelector
+        .optional()
+        .describe('Restrict to one scope by name or id. Default: all scopes the user can access.'),
       limit: z.number().int().min(1).max(50).optional().describe('Max results, default 8.'),
     },
     async (args) =>

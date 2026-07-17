@@ -37,11 +37,13 @@ const accessSelect = (userId: string, includeMemoryCount: boolean): SQL => sql`
          o.name AS org_name,
          om.role AS org_role,
          (sm.user_id IS NOT NULL) AS is_scope_member,
-         ${includeMemoryCount
-           ? sql`(SELECT count(*)::int FROM memories m
+         ${
+           includeMemoryCount
+             ? sql`(SELECT count(*)::int FROM memories m
                     WHERE m.scope_id = s.id AND m.deleted_at IS NULL
                       AND (m.expires_at IS NULL OR m.expires_at > now()))`
-           : sql`0::int`} AS memory_count
+             : sql`0::int`
+         } AS memory_count
   FROM scopes s
   ${accessJoins(userId)}`;
 
@@ -144,9 +146,7 @@ export async function resolveScopeSelector(
   }
   const needle = selector.toLowerCase();
   const matches = scopes.filter(
-    (s) =>
-      s.name.toLowerCase() === needle ||
-      `${(s.orgName ?? '').toLowerCase()}/${s.name.toLowerCase()}` === needle,
+    (s) => s.name.toLowerCase() === needle || `${(s.orgName ?? '').toLowerCase()}/${s.name.toLowerCase()}` === needle,
   );
   if (matches.length === 1) return { scope: matches[0] };
   if (matches.length > 1) {

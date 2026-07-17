@@ -4,27 +4,13 @@ import { Building2Icon, PlusIcon } from 'lucide-react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
-import type {
-  OrgMember,
-  OrgRole,
-  OrgScopeType,
-  Organization,
-  ScopeMember,
-  ScopeWithAccess,
-} from '@echo/shared';
+import type { OrgMember, OrgRole, OrgScopeType, Organization, ScopeMember, ScopeWithAccess } from '@echo/shared';
 import { ORG_SCOPE_TYPES } from '@echo/shared';
 import type { AuditQuery } from '@/api';
 import * as api from '@/api';
 import { ApiRequestError, errorMessage } from '@/api';
 import { useAuth } from '@/auth';
-import {
-  isAuthorizationDependentKey,
-  keys,
-  useOrg,
-  useOrgMembers,
-  useScopeMembers,
-  useScopes,
-} from '@/hooks';
+import { isAuthorizationDependentKey, keys, useOrg, useOrgMembers, useScopeMembers, useScopes } from '@/hooks';
 import { AuditTable } from '@/components/AuditTable';
 import { RoleBadge, ScopeBadge } from '@/components/Badge';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
@@ -33,49 +19,24 @@ import { MemoryBrowser } from '@/components/MemoryBrowser';
 import { PageHeader } from '@/components/PageHeader';
 import { RelativeTime } from '@/components/RelativeTime';
 import { RequestErrorState } from '@/components/RequestErrorState';
-import {
-  AuditListSkeleton,
-  MemoryFiltersSkeleton,
-  MemoryGridSkeleton,
-  TableSkeleton,
-} from '@/components/Skeletons';
+import { AuditListSkeleton, MemoryFiltersSkeleton, MemoryGridSkeleton, TableSkeleton } from '@/components/Skeletons';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 
 const TABS = ['memories', 'members', 'scopes', 'audit', 'settings'] as const;
 type Tab = (typeof TABS)[number];
 
-const isScopeMembersCacheKey = (key: unknown): boolean =>
-  Array.isArray(key) && key[0] === 'scope:members';
+const isScopeMembersCacheKey = (key: unknown): boolean => Array.isArray(key) && key[0] === 'scope:members';
 
 const ROLE_ITEMS = [
   { value: 'member', label: 'Member' },
@@ -91,18 +52,11 @@ export default function OrgDetailPage() {
   const tab: Tab = (TABS as readonly string[]).includes(rawTab ?? '') ? (rawTab as Tab) : 'memories';
 
   const { data: orgData, error, isLoading: orgLoading, mutate: mutateOrg } = useOrg(orgId);
-  const {
-    data: allScopes,
-    error: scopesError,
-    isLoading: scopesLoading,
-    mutate: mutateScopes,
-  } = useScopes();
+  const { data: allScopes, error: scopesError, isLoading: scopesLoading, mutate: mutateScopes } = useScopes();
 
   const org = orgData?.org ?? null;
   const role: OrgRole = orgData?.role ?? 'member';
-  const scopes: ScopeWithAccess[] | null = allScopes
-    ? allScopes.filter((s) => s.orgId === orgId)
-    : null;
+  const scopes: ScopeWithAccess[] | null = allScopes ? allScopes.filter((s) => s.orgId === orgId) : null;
   const notFound =
     (error instanceof ApiRequestError && (error.status === 404 || error.status === 403)) ||
     Boolean(org && allScopes && !allScopes.some((scope) => scope.orgId === orgId));
@@ -198,12 +152,7 @@ export default function OrgDetailPage() {
       {tab === 'members' && <MembersTab orgId={orgId} canManage={isOwner} />}
 
       {tab === 'scopes' && (
-        <ScopesTab
-          orgId={orgId}
-          scopes={scopes ?? []}
-          isOwner={isOwner}
-          onChanged={() => void mutateScopes()}
-        />
+        <ScopesTab orgId={orgId} scopes={scopes ?? []} isOwner={isOwner} onChanged={() => void mutateScopes()} />
       )}
 
       {tab === 'audit' &&
@@ -290,10 +239,7 @@ function MembersTab({ orgId, canManage }: { orgId: string; canManage: boolean })
       toast.success(leavingSelf ? 'You left the organization' : `Removed ${target.name}`);
       if (leavingSelf) {
         await mutate(isAuthorizationDependentKey, undefined, { revalidate: false });
-        await Promise.allSettled([
-          mutate(keys.orgs),
-          mutate(keys.scopes),
-        ]);
+        await Promise.allSettled([mutate(keys.orgs), mutate(keys.scopes)]);
         navigate('/orgs', { replace: true });
       } else {
         await Promise.allSettled([
@@ -473,11 +419,7 @@ function AddMemberModal({
   };
 
   return (
-    <Dialog
-      open
-      disablePointerDismissal={pending}
-      onOpenChange={(open) => !open && !pending && onClose()}
-    >
+    <Dialog open disablePointerDismissal={pending} onOpenChange={(open) => !open && !pending && onClose()}>
       <DialogContent showCloseButton={!pending}>
         <DialogHeader>
           <DialogTitle>Add member</DialogTitle>
@@ -708,11 +650,7 @@ function ScopeMembers({ scopeId }: { scopeId: string }) {
   return (
     <div className="mt-3 border-t pt-3">
       {members == null && membersError ? (
-        <RequestErrorState
-          error={membersError}
-          onRetry={() => mutate()}
-          title="Could not load scope members"
-        />
+        <RequestErrorState error={membersError} onRetry={() => mutate()} title="Could not load scope members" />
       ) : members == null ? (
         <div aria-hidden>
           <div className="flex h-8 items-center">
@@ -794,11 +732,7 @@ function CreateScopeModal({
   };
 
   return (
-    <Dialog
-      open
-      disablePointerDismissal={pending}
-      onOpenChange={(open) => !open && !pending && onClose()}
-    >
+    <Dialog open disablePointerDismissal={pending} onOpenChange={(open) => !open && !pending && onClose()}>
       <DialogContent showCloseButton={!pending}>
         <DialogHeader>
           <DialogTitle>New scope</DialogTitle>
@@ -862,12 +796,7 @@ function OrgAudit({ orgId }: { orgId: string }) {
   // Auth and API-key events never carry an org id, so their chips would
   // always be empty here.
   return (
-    <AuditTable
-      fetchPage={fetchPage}
-      scopeKey={`org:${orgId}`}
-      categories={['memory', 'org', 'scope']}
-      showActor
-    />
+    <AuditTable fetchPage={fetchPage} scopeKey={`org:${orgId}`} categories={['memory', 'org', 'scope']} showActor />
   );
 }
 
@@ -901,11 +830,7 @@ function SettingsTab({ org, isOwner }: { org: Organization; isOwner: boolean }) 
       await api.updateOrg(org.id, { name: name.trim() });
       // The server also renames the organization-level scope, so refresh every
       // cached label that can surface the old name.
-      await Promise.allSettled([
-        mutate(keys.org(org.id)),
-        mutate(keys.orgs),
-        mutate(keys.scopes),
-      ]);
+      await Promise.allSettled([mutate(keys.org(org.id)), mutate(keys.orgs), mutate(keys.scopes)]);
       toast.success('Organization renamed');
     } catch (err) {
       toast.error(errorMessage(err));
@@ -916,88 +841,88 @@ function SettingsTab({ org, isOwner }: { org: Organization; isOwner: boolean }) 
 
   return (
     <div className="flex max-w-120 flex-col gap-5">
-    <Card>
-      <CardHeader>
-        <CardTitle>Organization settings</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {isOwner ? (
-          <form onSubmit={(e) => void submit(e)}>
-            <FieldGroup>
-              <Field>
-                <FieldLabel htmlFor="org-rename">Name</FieldLabel>
-                <Input
-                  id="org-rename"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required
-                  maxLength={100}
-                />
-              </Field>
-              <Field>
-                <FieldLabel>Created</FieldLabel>
-                <div className="text-xs/relaxed">
-                  <RelativeTime date={org.createdAt} />
-                </div>
-              </Field>
-              <Field>
-                <Button
-                  type="submit"
-                  className="w-fit"
-                  disabled={pending || !name.trim() || name.trim() === org.name}
-                >
-                  {pending && <Spinner />}
-                  Save changes
-                </Button>
-              </Field>
-            </FieldGroup>
-          </form>
-        ) : (
-          <FieldGroup>
-            <Field>
-              <FieldLabel>Name</FieldLabel>
-              <div className="text-xs/relaxed">{org.name}</div>
-            </Field>
-            <Alert>
-              <AlertTitle>Only organization owners can change settings.</AlertTitle>
-            </Alert>
-          </FieldGroup>
-        )}
-      </CardContent>
-    </Card>
-
-    {isOwner && (
       <Card>
         <CardHeader>
-          <CardTitle>Danger zone</CardTitle>
+          <CardTitle>Organization settings</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-wrap items-center justify-between gap-2.5">
-            <p className="text-xs/relaxed text-muted-foreground">
-              Permanently delete this organization, its scopes, and every memory in them.
-            </p>
-            <Button variant="destructive" onClick={() => setShowDelete(true)}>
-              Delete organization
-            </Button>
-          </div>
+          {isOwner ? (
+            <form onSubmit={(e) => void submit(e)}>
+              <FieldGroup>
+                <Field>
+                  <FieldLabel htmlFor="org-rename">Name</FieldLabel>
+                  <Input
+                    id="org-rename"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    required
+                    maxLength={100}
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel>Created</FieldLabel>
+                  <div className="text-xs/relaxed">
+                    <RelativeTime date={org.createdAt} />
+                  </div>
+                </Field>
+                <Field>
+                  <Button
+                    type="submit"
+                    className="w-fit"
+                    disabled={pending || !name.trim() || name.trim() === org.name}
+                  >
+                    {pending && <Spinner />}
+                    Save changes
+                  </Button>
+                </Field>
+              </FieldGroup>
+            </form>
+          ) : (
+            <FieldGroup>
+              <Field>
+                <FieldLabel>Name</FieldLabel>
+                <div className="text-xs/relaxed">{org.name}</div>
+              </Field>
+              <Alert>
+                <AlertTitle>Only organization owners can change settings.</AlertTitle>
+              </Alert>
+            </FieldGroup>
+          )}
         </CardContent>
       </Card>
-    )}
 
-    {isOwner && showDelete && (
-      <ConfirmDialog
-        title="Delete organization?"
-        message={
-          <>
-            Deleting <strong>{org.name}</strong> permanently deletes all of its scopes and
-            memories, and removes every member. This cannot be undone.
-          </>
-        }
-        confirmLabel="Delete organization"
-        onConfirm={deleteOrganization}
-        onClose={() => setShowDelete(false)}
-      />
-    )}
+      {isOwner && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Danger zone</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap items-center justify-between gap-2.5">
+              <p className="text-xs/relaxed text-muted-foreground">
+                Permanently delete this organization, its scopes, and every memory in them.
+              </p>
+              <Button variant="destructive" onClick={() => setShowDelete(true)}>
+                Delete organization
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {isOwner && showDelete && (
+        <ConfirmDialog
+          title="Delete organization?"
+          message={
+            <>
+              Deleting <strong>{org.name}</strong> permanently deletes all of its scopes and memories, and removes every
+              member. This cannot be undone.
+            </>
+          }
+          confirmLabel="Delete organization"
+          onConfirm={deleteOrganization}
+          onClose={() => setShowDelete(false)}
+        />
+      )}
     </div>
   );
 }

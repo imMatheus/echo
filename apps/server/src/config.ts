@@ -15,9 +15,7 @@ function isEmailFrom(value: string): boolean {
   return isEmailAddress(displayAddress ?? value);
 }
 
-const boolString = z
-  .enum(['true', 'false', '1', '0'])
-  .transform((v) => v === 'true' || v === '1');
+const boolString = z.enum(['true', 'false', '1', '0']).transform((v) => v === 'true' || v === '1');
 
 const EnvSchema = z.object({
   /** Generic application database connection URL. */

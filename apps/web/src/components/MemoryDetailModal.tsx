@@ -22,10 +22,7 @@ export default function MemoryDetailModal() {
 
   return (
     <Dialog open onOpenChange={(open) => !open && close()}>
-      <DialogContent
-        showCloseButton={false}
-        className="flex w-[calc(100%-2rem)] max-w-2xl flex-col gap-4 sm:max-w-2xl"
-      >
+      <DialogContent showCloseButton={false} className="flex w-[calc(100%-2rem)] max-w-2xl flex-col gap-4 sm:max-w-2xl">
         <DialogTitle className="sr-only">Memory</DialogTitle>
         <MemoryDetailView
           id={id}

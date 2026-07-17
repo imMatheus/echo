@@ -12,7 +12,7 @@ services:
     volumes:
       - echo-db-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U echo -d echo"]
+      test: ['CMD-SHELL', 'pg_isready -U echo -d echo']
       interval: 5s
       timeout: 5s
       retries: 12
@@ -30,14 +30,14 @@ services:
     cap_drop:
       - ALL
     ports:
-      - "${BIND_ADDRESS:-127.0.0.1}:${PORT:-8080}:8080"
+      - '${BIND_ADDRESS:-127.0.0.1}:${PORT:-8080}:8080'
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgres://echo:echo@db:5432/echo}
       APP_URL: ${APP_URL:-}
       DISABLE_SIGNUP: ${DISABLE_SIGNUP:-false}
       SESSION_TTL_DAYS: ${SESSION_TTL_DAYS:-30}
       EMAIL_PROVIDER: ${EMAIL_PROVIDER:-console}
-      EMAIL_FROM: "${EMAIL_FROM:-Echo <onboarding@resend.dev>}"
+      EMAIL_FROM: '${EMAIL_FROM:-Echo <onboarding@resend.dev>}'
       EMAIL_REPLY_TO: ${EMAIL_REPLY_TO:-}
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       AUTH_TOKEN_SECRET: ${AUTH_TOKEN_SECRET:-}
@@ -55,7 +55,7 @@ services:
       db:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/api/v1/health || exit 1"]
+      test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1:8080/api/v1/health || exit 1']
       interval: 15s
       timeout: 5s
       retries: 5

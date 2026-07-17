@@ -60,11 +60,7 @@ export async function getUsageStats(app: AppContext, userId: string, range: Stat
     isNull(memories.deletedAt),
     or(isNull(memories.expiresAt), gt(memories.expiresAt, sql`now()`)),
   );
-  const inRange = and(
-    eq(auditLogs.actorUserId, userId),
-    gte(auditLogs.occurredAt, since),
-    notOrgReadFanout,
-  );
+  const inRange = and(eq(auditLogs.actorUserId, userId), gte(auditLogs.occurredAt, since), notOrgReadFanout);
 
   const [totalResult, memoriesOverTime, actionsOverTime, sourceApps] = await Promise.all([
     app.db.select({ count: count() }).from(memories).where(activeMemory),

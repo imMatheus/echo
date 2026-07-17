@@ -1,38 +1,28 @@
-import { useState } from 'react'
-import type { FormEvent } from 'react'
-import { Building2Icon, PlusIcon } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
-import { useSWRConfig } from 'swr'
-import { toast } from 'sonner'
-import * as api from '@/api'
-import { errorMessage } from '@/api'
-import { keys, useOrgs } from '@/hooks'
-import { RoleBadge } from '@/components/Badge'
-import { EmptyState } from '@/components/EmptyState'
-import { PageHeader } from '@/components/PageHeader'
-import { PreviewCard } from '@/components/PreviewCard'
-import { RequestErrorState } from '@/components/RequestErrorState'
-import { PreviewCardSkeleton } from '@/components/Skeletons'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import {
-  Field,
-  FieldGroup,
-  FieldLabel,
-} from '@/components/ui/field'
-import { Input } from '@/components/ui/input'
-import { Spinner } from '@/components/ui/spinner'
+import { useState } from 'react';
+import type { FormEvent } from 'react';
+import { Building2Icon, PlusIcon } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { useSWRConfig } from 'swr';
+import { toast } from 'sonner';
+import * as api from '@/api';
+import { errorMessage } from '@/api';
+import { keys, useOrgs } from '@/hooks';
+import { RoleBadge } from '@/components/Badge';
+import { EmptyState } from '@/components/EmptyState';
+import { PageHeader } from '@/components/PageHeader';
+import { PreviewCard } from '@/components/PreviewCard';
+import { RequestErrorState } from '@/components/RequestErrorState';
+import { PreviewCardSkeleton } from '@/components/Skeletons';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Field, FieldGroup, FieldLabel } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import { Spinner } from '@/components/ui/spinner';
 
 export default function OrgsPage() {
-  const { data: orgs, error, mutate } = useOrgs()
-  const [showCreate, setShowCreate] = useState(false)
+  const { data: orgs, error, mutate } = useOrgs();
+  const [showCreate, setShowCreate] = useState(false);
 
   return (
     <div>
@@ -50,10 +40,7 @@ export default function OrgsPage() {
       {!orgs && error ? (
         <RequestErrorState error={error} onRetry={() => mutate()} />
       ) : !orgs ? (
-        <div
-          className="grid grid-cols-1 gap-1.5 sm:grid-cols-[repeat(auto-fill,minmax(245px,1fr))]"
-          aria-hidden
-        >
+        <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-[repeat(auto-fill,minmax(245px,1fr))]" aria-hidden>
           {Array.from({ length: 3 }, (_, i) => (
             <PreviewCardSkeleton key={i} />
           ))}
@@ -92,41 +79,37 @@ export default function OrgsPage() {
 
       {showCreate && <CreateOrgModal onClose={() => setShowCreate(false)} />}
     </div>
-  )
+  );
 }
 
 function CreateOrgModal({ onClose }: { onClose: () => void }) {
-  const navigate = useNavigate()
-  const { mutate } = useSWRConfig()
-  const [name, setName] = useState('')
-  const [pending, setPending] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const navigate = useNavigate();
+  const { mutate } = useSWRConfig();
+  const [name, setName] = useState('');
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const submit = async (e: FormEvent) => {
-    e.preventDefault()
-    setError(null)
+    e.preventDefault();
+    setError(null);
     if (!name.trim()) {
-      setError('Name is required')
-      return
+      setError('Name is required');
+      return;
     }
-    setPending(true)
+    setPending(true);
     try {
-      const res = await api.createOrg({ name: name.trim() })
-      void mutate(keys.orgs)
-      toast.success(`Created ${res.org.name}`)
-      navigate(`/orgs/${res.org.id}`)
+      const res = await api.createOrg({ name: name.trim() });
+      void mutate(keys.orgs);
+      toast.success(`Created ${res.org.name}`);
+      navigate(`/orgs/${res.org.id}`);
     } catch (err) {
-      setError(errorMessage(err))
-      setPending(false)
+      setError(errorMessage(err));
+      setPending(false);
     }
-  }
+  };
 
   return (
-    <Dialog
-      open
-      disablePointerDismissal={pending}
-      onOpenChange={(open) => !open && !pending && onClose()}
-    >
+    <Dialog open disablePointerDismissal={pending} onOpenChange={(open) => !open && !pending && onClose()}>
       <DialogContent showCloseButton={!pending}>
         <DialogHeader>
           <DialogTitle>New organization</DialogTitle>
@@ -152,12 +135,7 @@ function CreateOrgModal({ onClose }: { onClose: () => void }) {
             </Field>
           </FieldGroup>
           <DialogFooter className="mt-4">
-            <Button
-              variant="outline"
-              type="button"
-              onClick={onClose}
-              disabled={pending}
-            >
+            <Button variant="outline" type="button" onClick={onClose} disabled={pending}>
               Cancel
             </Button>
             <Button type="submit" disabled={pending}>
@@ -168,5 +146,5 @@ function CreateOrgModal({ onClose }: { onClose: () => void }) {
         </form>
       </DialogContent>
     </Dialog>
-  )
+  );
 }

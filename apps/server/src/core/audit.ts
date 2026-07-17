@@ -103,9 +103,7 @@ async function listAudit(
   const where = and(
     eq(filterColumn, filterValue),
     extraCondition,
-    q.action
-      ? sql`${auditLogs.action} ILIKE ${`%${escapeLikePattern(q.action)}%`} ESCAPE E'\\\\'`
-      : undefined,
+    q.action ? sql`${auditLogs.action} ILIKE ${`%${escapeLikePattern(q.action)}%`} ESCAPE E'\\\\'` : undefined,
   );
   const [totalRes, rows] = await Promise.all([
     app.db.select({ n: count() }).from(auditLogs).where(where),

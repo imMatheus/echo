@@ -44,7 +44,9 @@ export default function VerifyEmailPage() {
         )}
         {error && (
           <FieldDescription className="text-center">
-            <Link to="/login" className="underline underline-offset-4">Back to login</Link>
+            <Link to="/login" className="underline underline-offset-4">
+              Back to login
+            </Link>
           </FieldDescription>
         )}
       </FieldGroup>

@@ -43,9 +43,7 @@ export async function createApiKey(
   const { secret, prefix, hash } = generateApiKey();
   // The explicit sourceApp is route-bounded to 64 characters. Keep the same
   // invariant for the name-derived fallback used when callers omit it.
-  const sourceApp = (
-    input.sourceApp?.trim() || input.name.trim().toLowerCase().replace(/\s+/g, '-')
-  ).slice(0, 64);
+  const sourceApp = (input.sourceApp?.trim() || input.name.trim().toLowerCase().replace(/\s+/g, '-')).slice(0, 64);
   const [row] = await app.db
     .insert(apiKeys)
     .values({ userId: ctx.userId, name: input.name, sourceApp, keyPrefix: prefix, keyHash: hash })
@@ -105,9 +103,7 @@ export async function resolveApiKey(app: AppContext, secret: string): Promise<Re
     })
     .from(apiKeys)
     .innerJoin(users, eq(users.id, apiKeys.userId))
-    .where(
-      and(eq(apiKeys.keyHash, sha256Hex(secret)), isNull(apiKeys.revokedAt), isNotNull(users.emailVerifiedAt)),
-    )
+    .where(and(eq(apiKeys.keyHash, sha256Hex(secret)), isNull(apiKeys.revokedAt), isNotNull(users.emailVerifiedAt)))
     .limit(1);
   if (!row) return null;
   // Throttled last-used tracking; fire-and-forget.

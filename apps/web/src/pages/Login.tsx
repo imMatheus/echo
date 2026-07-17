@@ -1,6 +1,6 @@
-import { Link } from 'react-router-dom'
-import { LogoMark } from '../components/icons'
-import { LoginForm } from '../components/login-form'
+import { Link } from 'react-router-dom';
+import { LogoMark } from '../components/icons';
+import { LoginForm } from '../components/login-form';
 
 /** Shared two-column auth shell (shadcn login-02 block layout). */
 export function AuthLayout({ children }: { children: React.ReactNode }) {
@@ -26,7 +26,7 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
         />
       </div>
     </div>
-  )
+  );
 }
 
 export default function LoginPage() {
@@ -34,5 +34,5 @@ export default function LoginPage() {
     <AuthLayout>
       <LoginForm />
     </AuthLayout>
-  )
+  );
 }

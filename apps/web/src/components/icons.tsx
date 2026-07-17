@@ -8,5 +8,5 @@ export function LogoMark({ size = 26 }: { size?: number }) {
       height={size}
       className="rounded-full"
     />
-  )
+  );
 }

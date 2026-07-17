@@ -73,11 +73,7 @@ async function invalidateActiveTokens(
     .where(and(eq(authTokens.userId, userId), eq(authTokens.purpose, purpose), isNull(authTokens.usedAt)));
 }
 
-async function queueRequestedEmail(
-  app: AppContext,
-  userId: string,
-  purpose: AuthTokenPurpose,
-): Promise<boolean> {
+async function queueRequestedEmail(app: AppContext, userId: string, purpose: AuthTokenPurpose): Promise<boolean> {
   return app.db.transaction(async (tx) => {
     const locked = await tx.execute(sql`SELECT id FROM users WHERE id = ${userId} FOR UPDATE`);
     if (!locked.rows.length) return false;
@@ -162,12 +158,19 @@ export async function verifyEmail(app: AppContext, candidate: string): Promise<U
     await tx
       .update(authTokens)
       .set({ usedAt: now })
-      .where(and(eq(authTokens.userId, token.userId), eq(authTokens.purpose, 'verify_email'), isNull(authTokens.usedAt)));
+      .where(
+        and(eq(authTokens.userId, token.userId), eq(authTokens.purpose, 'verify_email'), isNull(authTokens.usedAt)),
+      );
     const [verified] = await tx
       .update(users)
       .set({ emailVerifiedAt: now, updatedAt: now })
       .where(eq(users.id, token.userId))
-      .returning({ id: users.id, email: users.email, name: users.name, createdAt: users.createdAt });
+      .returning({
+        id: users.id,
+        email: users.email,
+        name: users.name,
+        createdAt: users.createdAt,
+      });
     if (!verified) throw tokenError('verify_email');
     return verified;
   });
@@ -188,21 +191,25 @@ export async function resetPassword(app: AppContext, candidate: string, password
       token.expiresAt <= new Date() ||
       !verifyAuthActionToken(
         candidate,
-        { id: token.id, userId: token.userId, purpose: 'password_reset', tokenHash: token.tokenHash },
+        {
+          id: token.id,
+          userId: token.userId,
+          purpose: 'password_reset',
+          tokenHash: token.tokenHash,
+        },
         app.config.AUTH_TOKEN_SECRET,
       )
     ) {
       throw tokenError('password_reset');
     }
     const now = new Date();
-    await tx
-      .update(users)
-      .set({ passwordHash, updatedAt: now })
-      .where(eq(users.id, token.userId));
+    await tx.update(users).set({ passwordHash, updatedAt: now }).where(eq(users.id, token.userId));
     await tx
       .update(authTokens)
       .set({ usedAt: now })
-      .where(and(eq(authTokens.userId, token.userId), eq(authTokens.purpose, 'password_reset'), isNull(authTokens.usedAt)));
+      .where(
+        and(eq(authTokens.userId, token.userId), eq(authTokens.purpose, 'password_reset'), isNull(authTokens.usedAt)),
+      );
     await tx.delete(sessions).where(eq(sessions.userId, token.userId));
     await tx.insert(emailOutbox).values({ userId: token.userId, template: 'password_changed' });
     return token.userId;

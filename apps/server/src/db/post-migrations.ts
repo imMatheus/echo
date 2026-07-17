@@ -263,7 +263,6 @@ async function triggerIsCurrent(
 }
 
 async function ensureLegacyWriteGuards(client: PoolClient, log: (message: string) => void): Promise<void> {
-
   // Publish the function/trigger set atomically. In particular, never expose a
   // gap between dropping the old tsv trigger and installing its replacement:
   // a crash or concurrent legacy write in that gap could leave stale search data.
@@ -288,14 +287,11 @@ async function ensureLegacyWriteGuards(client: PoolClient, log: (message: string
     END
     $$ LANGUAGE plpgsql`);
     if (
-      !(await triggerIsCurrent(
-        client,
-        'memories_tsv_trigger',
-        'memories',
-        'memories_tsv_update',
-        23,
-        ['content', 'tags', 'source_app'],
-      ))
+      !(await triggerIsCurrent(client, 'memories_tsv_trigger', 'memories', 'memories_tsv_update', 23, [
+        'content',
+        'tags',
+        'source_app',
+      ]))
     ) {
       await client.query(`DROP TRIGGER IF EXISTS "memories_tsv_trigger" ON "public"."memories"`);
       await client.query(`
@@ -312,14 +308,9 @@ async function ensureLegacyWriteGuards(client: PoolClient, log: (message: string
     END
     $$ LANGUAGE plpgsql`);
     if (
-      !(await triggerIsCurrent(
-        client,
-        'echo_api_keys_normalize_trigger',
-        'api_keys',
-        'echo_api_key_normalize',
-        23,
-        ['source_app'],
-      ))
+      !(await triggerIsCurrent(client, 'echo_api_keys_normalize_trigger', 'api_keys', 'echo_api_key_normalize', 23, [
+        'source_app',
+      ]))
     ) {
       await client.query(`DROP TRIGGER IF EXISTS "echo_api_keys_normalize_trigger" ON "public"."api_keys"`);
       await client.query(`
@@ -423,10 +414,7 @@ export async function ensureConcurrentIndexes(
  * must run in autocommit mode. This resumable phase runs after Drizzle commits;
  * its marker is written last so a crash safely retries every idempotent step.
  */
-export async function runPostMigrations(
-  client: PoolClient,
-  log: (message: string) => void = () => {},
-): Promise<void> {
+export async function runPostMigrations(client: PoolClient, log: (message: string) => void = () => {}): Promise<void> {
   await client.query(`
     CREATE TABLE IF NOT EXISTS "drizzle"."__echo_post_migrations" (
       name text PRIMARY KEY,
@@ -435,10 +423,9 @@ export async function runPostMigrations(
   // This catalog-checked guard also upgrades databases that briefly ran an
   // earlier 0001 implementation and already have the completion marker.
   await ensureLegacyWriteGuards(client, log);
-  const completed = await client.query(
-    `SELECT 1 FROM "drizzle"."__echo_post_migrations" WHERE name = $1`,
-    [POST_MIGRATION],
-  );
+  const completed = await client.query(`SELECT 1 FROM "drizzle"."__echo_post_migrations" WHERE name = $1`, [
+    POST_MIGRATION,
+  ]);
   if (completed.rows.length > 0) return;
 
   await runCursorBatches(client, 'purged legacy deleted memories', DELETE_SOFT_DELETED, log);
@@ -448,9 +435,8 @@ export async function runPostMigrations(
   await runCursorBatches(client, 'normalized memory source apps', NORMALIZE_MEMORY_SOURCES, log);
   await ensureConcurrentIndexes(client, log);
 
-  await client.query(
-    `INSERT INTO "drizzle"."__echo_post_migrations" (name) VALUES ($1) ON CONFLICT DO NOTHING`,
-    [POST_MIGRATION],
-  );
+  await client.query(`INSERT INTO "drizzle"."__echo_post_migrations" (name) VALUES ($1) ON CONFLICT DO NOTHING`, [
+    POST_MIGRATION,
+  ]);
   log(`post-migration ${POST_MIGRATION} complete`);
 }

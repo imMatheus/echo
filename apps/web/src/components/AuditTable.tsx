@@ -160,7 +160,9 @@ export function AuditTable({
         />
       ) : (
         <>
-          <div className={cn('divide-y overflow-hidden rounded-xl border bg-card shadow-card', loading && 'opacity-55')}>
+          <div
+            className={cn('divide-y overflow-hidden rounded-xl border bg-card shadow-card', loading && 'opacity-55')}
+          >
             {groups.map((group) => (
               <section key={group.label}>
                 <header className="flex items-baseline gap-2 border-b bg-muted/40 px-4 py-1.5">
@@ -222,9 +224,7 @@ function AuditRow({
         <span className="flex min-w-0 flex-1 items-baseline gap-2">
           <span className="whitespace-nowrap text-[13px]/6 font-medium">{actionLabel(entry.action)}</span>
           {showActor && entry.actorName && (
-            <span className="max-w-40 shrink-0 truncate text-[11px] text-muted-foreground">
-              by {entry.actorName}
-            </span>
+            <span className="max-w-40 shrink-0 truncate text-[11px] text-muted-foreground">by {entry.actorName}</span>
           )}
           {summary && <span className="truncate text-xs text-muted-foreground">{summary}</span>}
         </span>

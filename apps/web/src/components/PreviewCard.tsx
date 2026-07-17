@@ -59,9 +59,7 @@ export function PreviewCard({
             <ArrowRightIcon className="mt-0.5 size-3.5 shrink-0 text-grayscale-9 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-grayscale-11" />
           )}
         </div>
-        {description && (
-          <div className="mt-1 text-pretty text-xs leading-5 text-grayscale-10">{description}</div>
-        )}
+        {description && <div className="mt-1 text-pretty text-xs leading-5 text-grayscale-10">{description}</div>}
       </div>
     </>
   );

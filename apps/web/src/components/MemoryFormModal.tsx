@@ -1,34 +1,16 @@
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
-import type {
-  CreateMemoryRequest,
-  Memory,
-  MemoryKind,
-  ScopeWithAccess,
-  Sensitivity,
-} from '@echo/shared';
+import type { CreateMemoryRequest, Memory, MemoryKind, ScopeWithAccess, Sensitivity } from '@echo/shared';
 import { MEMORY_KINDS, SENSITIVITIES } from '@echo/shared';
 import * as api from '../api';
 import { errorMessage } from '../api';
 import { ScopeSelectItems, scopeSelectItems } from './ScopeOptions';
 import { Alert, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
 
@@ -144,11 +126,7 @@ export function MemoryFormModal({
   };
 
   return (
-    <Dialog
-      open
-      disablePointerDismissal={pending}
-      onOpenChange={(open) => !open && !pending && onClose()}
-    >
+    <Dialog open disablePointerDismissal={pending} onOpenChange={(open) => !open && !pending && onClose()}>
       <DialogContent className="sm:max-w-[560px]" showCloseButton={!pending}>
         <DialogHeader>
           <DialogTitle>New memory</DialogTitle>
@@ -177,11 +155,7 @@ export function MemoryFormModal({
 
             <Field>
               <FieldLabel htmlFor="mem-scope">Scope</FieldLabel>
-              <Select
-                items={scopeSelectItems(writable)}
-                value={scopeId}
-                onValueChange={(v) => setScopeId(v as string)}
-              >
+              <Select items={scopeSelectItems(writable)} value={scopeId} onValueChange={(v) => setScopeId(v as string)}>
                 <SelectTrigger id="mem-scope" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
@@ -189,9 +163,7 @@ export function MemoryFormModal({
                   <ScopeSelectItems scopes={writable} />
                 </SelectContent>
               </Select>
-              <FieldDescription>
-                Scope controls which people can access this memory through Echo.
-              </FieldDescription>
+              <FieldDescription>Scope controls which people can access this memory through Echo.</FieldDescription>
             </Field>
 
             <div className="grid grid-cols-2 gap-3 max-sm:grid-cols-1">

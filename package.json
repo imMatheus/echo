@@ -13,7 +13,12 @@
     "dev:web": "bun run --filter @echo/web dev",
     "start": "cd apps/server && bun --env-file=.env src/index.ts",
     "test": "bun run --filter './packages/*' --filter './apps/*' test",
-    "typecheck": "bun run --filter './packages/*' --filter './apps/*' typecheck"
+    "typecheck": "bun run --filter './packages/*' --filter './apps/*' typecheck",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "prettier": "^3.3.3"
   },
   "workspaces": [
     "apps/*",

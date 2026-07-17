@@ -52,9 +52,11 @@ export class ResendEmailProvider implements EmailProvider {
       }),
       signal: AbortSignal.timeout(15_000),
     });
-    const body = (await response.json().catch(() => null)) as
-      | { id?: string; message?: string; error?: { message?: string } }
-      | null;
+    const body = (await response.json().catch(() => null)) as {
+      id?: string;
+      message?: string;
+      error?: { message?: string };
+    } | null;
     if (!response.ok || !body?.id) {
       const detail = body?.message ?? body?.error?.message ?? `HTTP ${response.status}`;
       throw new Error(`Resend rejected the email: ${detail}`);

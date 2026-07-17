@@ -19,10 +19,7 @@ export function mapUser(row: Pick<UserRow, 'id' | 'email' | 'name' | 'createdAt'
   };
 }
 
-export async function signup(
-  app: AppContext,
-  input: { email: string; password: string; name: string },
-): Promise<User> {
+export async function signup(app: AppContext, input: { email: string; password: string; name: string }): Promise<User> {
   const passwordHash = await hashPassword(input.password);
   let user: UserRow;
   try {
@@ -43,7 +40,11 @@ export async function signup(
     }
     throw error;
   }
-  await logAudit(app, { action: 'auth.signup', actorUserId: user.id, details: { email: user.email } });
+  await logAudit(app, {
+    action: 'auth.signup',
+    actorUserId: user.id,
+    details: { email: user.email },
+  });
   return mapUser(user);
 }
 

@@ -6,12 +6,7 @@ import { errorMessage } from '../api';
 import { useMeta } from '@/hooks';
 import { Alert, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import {
-  Field,
-  FieldDescription,
-  FieldGroup,
-  FieldLabel,
-} from '@/components/ui/field';
+import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
@@ -48,9 +43,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<'form'>)
       <FieldGroup>
         <div className="flex flex-col items-center gap-1 text-center">
           <h1 className="font-heading text-2xl font-bold">Login to your account</h1>
-          <p className="text-sm text-balance text-muted-foreground">
-            Enter your email below to login to your account
-          </p>
+          <p className="text-sm text-balance text-muted-foreground">Enter your email below to login to your account</p>
         </div>
         {error && (
           <Alert variant="destructive">

@@ -24,7 +24,12 @@ export function mcpRoutes(app: AppContext) {
       const ctx = await requireApiKeyAuth(app, req);
       if (!ctx) {
         reply.header('www-authenticate', 'Bearer realm="echo", error="invalid_token"');
-        return jsonRpcError(reply, 401, -32001, 'Unauthorized: pass an Echo API key as "Authorization: Bearer eck_..."');
+        return jsonRpcError(
+          reply,
+          401,
+          -32001,
+          'Unauthorized: pass an Echo API key as "Authorization: Bearer eck_..."',
+        );
       }
 
       const server = buildMcpServer(app, ctx);
@@ -47,7 +52,11 @@ export function mcpRoutes(app: AppContext) {
         if (!reply.raw.headersSent) {
           reply.raw.writeHead(500, { 'content-type': 'application/json' });
           reply.raw.end(
-            JSON.stringify({ jsonrpc: '2.0', error: { code: -32603, message: 'Internal server error' }, id: null }),
+            JSON.stringify({
+              jsonrpc: '2.0',
+              error: { code: -32603, message: 'Internal server error' },
+              id: null,
+            }),
           );
         } else {
           reply.raw.end();

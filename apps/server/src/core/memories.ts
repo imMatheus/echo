@@ -96,11 +96,7 @@ type MutationMemoryRow = Pick<
 >;
 
 /** Build the exact response written by a mutation while its transaction locks are still held. */
-function mapMutationMemory(
-  row: MutationMemoryRow,
-  scope: ScopeAccess,
-  createdByName: string | null,
-): Memory {
+function mapMutationMemory(row: MutationMemoryRow, scope: ScopeAccess, createdByName: string | null): Memory {
   return {
     id: row.id,
     scopeId: row.scopeId,
@@ -200,7 +196,11 @@ async function embedBestEffort(
   if (!app.embeddings) return null;
   try {
     const [embedding] = await app.embeddings.embed([text]);
-    return { vector: toVectorLiteral(embedding), model: app.embeddings.modelId, dimensions: embedding.length };
+    return {
+      vector: toVectorLiteral(embedding),
+      model: app.embeddings.modelId,
+      dimensions: embedding.length,
+    };
   } catch (err) {
     app.log.error({ err }, 'embedding failed; storing memory without a vector');
     return null;
@@ -322,10 +322,7 @@ export async function listMemories(
     requestedOrgId = scope.orgId;
   }
 
-  const conditions: SQL[] = [
-    sql`${memories.scopeId} IN (${accessibleScopeIdsQuery(ctx.userId)})`,
-    notGone(),
-  ];
+  const conditions: SQL[] = [sql`${memories.scopeId} IN (${accessibleScopeIdsQuery(ctx.userId)})`, notGone()];
   if (query.scopeId) conditions.push(eq(memories.scopeId, query.scopeId));
   if (query.q) {
     conditions.push(sql`${memories.content} ILIKE ${`%${escapeLikePattern(query.q)}%`} ESCAPE E'\\\\'`);
@@ -425,9 +422,7 @@ export async function searchMemories(
   // Bind the scope ids as a single Postgres array literal: interpolating a JS array
   // into a raw `sql` template spreads it into separate params, which breaks `= ANY(...)`.
   const scopeArray = requestedScopeIds ? `{${requestedScopeIds.join(',')}}` : null;
-  const requestedScopeFilter = scopeArray
-    ? sql`AND m.scope_id = ANY(${scopeArray}::uuid[])`
-    : sql``;
+  const requestedScopeFilter = scopeArray ? sql`AND m.scope_id = ANY(${scopeArray}::uuid[])` : sql``;
 
   // OR-semantics tsquery: recall queries are descriptions of what's needed, not
   // exact phrases, so any-term matching with rank ordering beats plainto's AND.
@@ -575,7 +570,9 @@ export async function updateMemory(
   // Only updated_at present → nothing actually changed.
   if (Object.keys(set).length === 1) return memory;
   const updated = await app.db.transaction(async (tx) => {
-    const orgIds = [...new Set([scope.orgId, targetScope.orgId].filter((value): value is string => Boolean(value)))].sort();
+    const orgIds = [
+      ...new Set([scope.orgId, targetScope.orgId].filter((value): value is string => Boolean(value))),
+    ].sort();
     for (const orgId of orgIds) {
       await tx.execute(sql`SELECT id FROM organizations WHERE id = ${orgId} FOR SHARE`);
     }
@@ -591,9 +588,7 @@ export async function updateMemory(
       FOR UPDATE`);
     if (current.rows[0]?.scopeId !== memory.scopeId) throw notFound('Memory not found');
 
-    const sourceResult = await tx.execute<LockedScopeAccess>(
-      lockedScopeAccessQuery(ctx.userId, memory.scopeId),
-    );
+    const sourceResult = await tx.execute<LockedScopeAccess>(lockedScopeAccessQuery(ctx.userId, memory.scopeId));
     const lockedSource = sourceResult.rows[0];
     if (!lockedSource || lockedSource.orgId !== scope.orgId) throw notFound('Memory not found');
     if (memory.createdBy !== ctx.userId && !lockedSource.canManage) {
@@ -601,9 +596,7 @@ export async function updateMemory(
     }
 
     if (targetScope.id !== memory.scopeId) {
-      const targetResult = await tx.execute<LockedScopeAccess>(
-        lockedScopeAccessQuery(ctx.userId, targetScope.id),
-      );
+      const targetResult = await tx.execute<LockedScopeAccess>(lockedScopeAccessQuery(ctx.userId, targetScope.id));
       const lockedTarget = targetResult.rows[0];
       if (!lockedTarget || lockedTarget.orgId !== targetScope.orgId) throw notFound('Target scope not found');
     }

@@ -179,10 +179,10 @@ try {
      RETURNING id`,
     [user.rows[0].id],
   );
-  await client.query(
-    `INSERT INTO org_members (org_id, user_id, role) VALUES ($1, $2, 'owner')`,
-    [org.rows[0].id, user.rows[0].id],
-  );
+  await client.query(`INSERT INTO org_members (org_id, user_id, role) VALUES ($1, $2, 'owner')`, [
+    org.rows[0].id,
+    user.rows[0].id,
+  ]);
   await client.query('SET CONSTRAINTS ALL IMMEDIATE');
   await client.query('SET CONSTRAINTS ALL DEFERRED');
   await client.query(`UPDATE org_members SET role = 'member' WHERE org_id = $1 AND user_id = $2`, [

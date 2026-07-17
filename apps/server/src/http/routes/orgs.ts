@@ -76,7 +76,10 @@ export function orgRoutes(app: AppContext) {
       const ctx = await requireAuth(app, req);
       const { id } = parse(idParam, req.params);
       const body = parse(
-        z.object({ email: z.string().trim().email().max(254), role: z.enum(ORG_ROLES).default('member') }),
+        z.object({
+          email: z.string().trim().email().max(254),
+          role: z.enum(ORG_ROLES).default('member'),
+        }),
         req.body,
       );
       const member = await addOrgMember(app, ctx, id, body.email, body.role);

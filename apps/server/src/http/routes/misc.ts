@@ -27,9 +27,7 @@ export function miscRoutes(app: AppContext) {
         name: 'Echo',
         version: VERSION,
         signupEnabled: !app.config.DISABLE_SIGNUP,
-        embeddings: app.embeddings
-          ? { provider: app.embeddings.provider, model: app.embeddings.model }
-          : null,
+        embeddings: app.embeddings ? { provider: app.embeddings.provider, model: app.embeddings.model } : null,
       };
     });
 

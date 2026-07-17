@@ -19,7 +19,9 @@ export function PageHeader({
       <div className="min-w-0">
         {backLink && <div className="mb-1.5">{backLink}</div>}
         <div className="flex min-w-0 flex-wrap items-center gap-2.5">
-          <h1 className="min-w-0 font-heading text-xl font-semibold tracking-tight [overflow-wrap:anywhere]">{title}</h1>
+          <h1 className="min-w-0 font-heading text-xl font-semibold tracking-tight [overflow-wrap:anywhere]">
+            {title}
+          </h1>
           {titleExtra}
         </div>
         {subtitle && <p className="mt-1 text-xs/relaxed text-muted-foreground">{subtitle}</p>}

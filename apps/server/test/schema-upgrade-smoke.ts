@@ -53,20 +53,20 @@ try {
        RETURNING id`,
       [`legacy-${databaseName}`, user.rows[0].id],
     );
-    await legacy.query(
-      `INSERT INTO org_members (org_id, user_id, role) VALUES ($1, $2, 'member')`,
-      [org.rows[0].id, user.rows[0].id],
-    );
+    await legacy.query(`INSERT INTO org_members (org_id, user_id, role) VALUES ($1, $2, 'member')`, [
+      org.rows[0].id,
+      user.rows[0].id,
+    ]);
     const legacyAdmin = await legacy.query<{ id: string }>(
       `INSERT INTO users (email, name, password_hash)
        VALUES ($1, 'Legacy Admin', 'unused')
        RETURNING id`,
       [`legacy-admin-${databaseName}@example.com`],
     );
-    await legacy.query(
-      `INSERT INTO org_members (org_id, user_id, role) VALUES ($1, $2, 'admin')`,
-      [org.rows[0].id, legacyAdmin.rows[0].id],
-    );
+    await legacy.query(`INSERT INTO org_members (org_id, user_id, role) VALUES ($1, $2, 'admin')`, [
+      org.rows[0].id,
+      legacyAdmin.rows[0].id,
+    ]);
     const scope = await legacy.query<{ id: string }>(
       `INSERT INTO scopes (type, name, org_id)
        VALUES ('organization', 'Legacy Organization', $1)

@@ -54,24 +54,59 @@ export default function ResetPasswordPage() {
           <div className="flex flex-col items-center gap-1 text-center">
             <h1 className="font-heading text-2xl font-bold">Choose a new password</h1>
           </div>
-          {complete && <Alert><AlertTitle>Your password was changed. You can now log in.</AlertTitle></Alert>}
-          {error && <Alert variant="destructive"><AlertTitle>{error}</AlertTitle></Alert>}
+          {complete && (
+            <Alert>
+              <AlertTitle>Your password was changed. You can now log in.</AlertTitle>
+            </Alert>
+          )}
+          {error && (
+            <Alert variant="destructive">
+              <AlertTitle>{error}</AlertTitle>
+            </Alert>
+          )}
           {!complete && (
             <>
               <Field>
                 <FieldLabel htmlFor="reset-password">New password</FieldLabel>
-                <Input id="reset-password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="new-password" minLength={8} maxLength={128} required autoFocus />
+                <Input
+                  id="reset-password"
+                  type="password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  autoComplete="new-password"
+                  minLength={8}
+                  maxLength={128}
+                  required
+                  autoFocus
+                />
                 <FieldDescription>At least 8 characters.</FieldDescription>
               </Field>
               <Field>
                 <FieldLabel htmlFor="reset-confirm-password">Confirm password</FieldLabel>
-                <Input id="reset-confirm-password" type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} autoComplete="new-password" minLength={8} maxLength={128} required />
+                <Input
+                  id="reset-confirm-password"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(event) => setConfirmPassword(event.target.value)}
+                  autoComplete="new-password"
+                  minLength={8}
+                  maxLength={128}
+                  required
+                />
               </Field>
-              <Field><Button type="submit" disabled={pending}>{pending && <Spinner />}Change password</Button></Field>
+              <Field>
+                <Button type="submit" disabled={pending}>
+                  {pending && <Spinner />}Change password
+                </Button>
+              </Field>
             </>
           )}
           {complete && (
-            <FieldDescription className="text-center"><Link to="/login" className="underline underline-offset-4">Go to login</Link></FieldDescription>
+            <FieldDescription className="text-center">
+              <Link to="/login" className="underline underline-offset-4">
+                Go to login
+              </Link>
+            </FieldDescription>
           )}
         </FieldGroup>
       </form>

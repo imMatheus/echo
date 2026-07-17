@@ -7,12 +7,7 @@ import { useMeta } from '@/hooks';
 import { AuthLayout } from './Login';
 import { Alert, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import {
-  Field,
-  FieldDescription,
-  FieldGroup,
-  FieldLabel,
-} from '@/components/ui/field';
+import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
 
@@ -55,9 +50,7 @@ export default function SignupPage() {
           <FieldGroup>
             <div className="flex flex-col items-center gap-1 text-center">
               <h1 className="font-heading text-2xl font-bold">Create your account</h1>
-              <p className="text-sm text-balance text-muted-foreground">
-                Enter your details below to get started
-              </p>
+              <p className="text-sm text-balance text-muted-foreground">Enter your details below to get started</p>
             </div>
             {error && (
               <Alert variant="destructive">

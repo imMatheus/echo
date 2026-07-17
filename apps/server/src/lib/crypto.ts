@@ -77,12 +77,7 @@ export function generateSessionToken(): string {
 
 export type AuthTokenPurpose = 'verify_email' | 'password_reset';
 
-function deriveAuthActionToken(
-  secret: string,
-  purpose: AuthTokenPurpose,
-  id: string,
-  userId: string,
-): string {
+function deriveAuthActionToken(secret: string, purpose: AuthTokenPurpose, id: string, userId: string): string {
   const signature = createHmac('sha256', secret)
     .update(`echo-auth-token\0${purpose}\0${id}\0${userId}`)
     .digest('base64url');
@@ -99,12 +94,7 @@ export function createAuthActionToken(
   return { id, token, tokenHash: sha256Hex(token) };
 }
 
-export function rebuildAuthActionToken(
-  secret: string,
-  purpose: AuthTokenPurpose,
-  id: string,
-  userId: string,
-): string {
+export function rebuildAuthActionToken(secret: string, purpose: AuthTokenPurpose, id: string, userId: string): string {
   return deriveAuthActionToken(secret, purpose, id, userId);
 }
 

@@ -44,21 +44,36 @@ export default function ForgotPasswordPage() {
             </Alert>
           )}
           {error && (
-            <Alert variant="destructive"><AlertTitle>{error}</AlertTitle></Alert>
+            <Alert variant="destructive">
+              <AlertTitle>{error}</AlertTitle>
+            </Alert>
           )}
           {!sent && (
             <>
               <Field>
                 <FieldLabel htmlFor="forgot-email">Email</FieldLabel>
-                <Input id="forgot-email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" required autoFocus maxLength={254} />
+                <Input
+                  id="forgot-email"
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  autoComplete="email"
+                  required
+                  autoFocus
+                  maxLength={254}
+                />
               </Field>
               <Field>
-                <Button type="submit" disabled={pending}>{pending && <Spinner />}Send reset link</Button>
+                <Button type="submit" disabled={pending}>
+                  {pending && <Spinner />}Send reset link
+                </Button>
               </Field>
             </>
           )}
           <FieldDescription className="text-center">
-            <Link to="/login" className="underline underline-offset-4">Back to login</Link>
+            <Link to="/login" className="underline underline-offset-4">
+              Back to login
+            </Link>
           </FieldDescription>
         </FieldGroup>
       </form>

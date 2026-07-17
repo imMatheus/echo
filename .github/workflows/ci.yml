@@ -51,7 +51,7 @@ jobs:
       - name: End-to-end smoke test
         env:
           DATABASE_URL: postgres://echo:echo@127.0.0.1:5433/echo
-          DISABLE_SIGNUP: "false"
+          DISABLE_SIGNUP: 'false'
           EMBEDDINGS_PROVIDER: none
           HOST: 127.0.0.1
           LOG_LEVEL: info

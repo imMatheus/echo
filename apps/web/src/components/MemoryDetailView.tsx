@@ -277,16 +277,12 @@ export function MemoryDetailView({
         </div>
       ) : (
         <Well className="p-4">
-          <p className="whitespace-pre-wrap text-sm leading-relaxed [overflow-wrap:anywhere]">
-            {memory.content}
-          </p>
+          <p className="whitespace-pre-wrap text-sm leading-relaxed [overflow-wrap:anywhere]">{memory.content}</p>
         </Well>
       )}
 
       <section className="flex flex-col gap-1">
-        <h3 className="text-[0.625rem] font-medium uppercase tracking-wider text-muted-foreground">
-          Details
-        </h3>
+        <h3 className="text-[0.625rem] font-medium uppercase tracking-wider text-muted-foreground">Details</h3>
         <dl className="grid grid-cols-1 gap-x-8 md:grid-cols-2">
           <MetaItem label="Scope">
             <ScopeBadge type={memory.scopeType} name={memory.scopeName} />

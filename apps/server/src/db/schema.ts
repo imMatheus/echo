@@ -45,7 +45,9 @@ const tags = text('tags')
 // --- Tables ----------------------------------------------------------------
 
 export const users = pgTable('users', {
-  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  id: uuid('id')
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
   email: citext('email').unique().notNull(),
   name: text('name').notNull(),
   passwordHash: text('password_hash').notNull(),
@@ -64,10 +66,7 @@ export const sessions = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   },
-  (t) => [
-    index('sessions_user_idx').on(t.userId),
-    index('sessions_expires_idx').on(t.expiresAt),
-  ],
+  (t) => [index('sessions_user_idx').on(t.userId), index('sessions_expires_idx').on(t.expiresAt)],
 );
 
 export const authTokens = pgTable(
@@ -93,7 +92,9 @@ export const authTokens = pgTable(
 export const emailOutbox = pgTable(
   'email_outbox',
   {
-    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
     userId: uuid('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
@@ -109,22 +110,23 @@ export const emailOutbox = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    uniqueIndex('email_outbox_auth_token_unique').on(t.authTokenId).where(sql`${t.authTokenId} IS NOT NULL`),
+    uniqueIndex('email_outbox_auth_token_unique')
+      .on(t.authTokenId)
+      .where(sql`${t.authTokenId} IS NOT NULL`),
     index('email_outbox_dispatch_idx')
       .on(t.nextAttemptAt)
       .where(sql`${t.sentAt} IS NULL AND ${t.failedAt} IS NULL`),
     index('email_outbox_provider_message_idx')
       .on(t.providerMessageId)
       .where(sql`${t.providerMessageId} IS NOT NULL`),
-    check(
-      'email_outbox_template_check',
-      sql`${t.template} IN ('verify_email', 'password_reset', 'password_changed')`,
-    ),
+    check('email_outbox_template_check', sql`${t.template} IN ('verify_email', 'password_reset', 'password_changed')`),
   ],
 );
 
 export const organizations = pgTable('organizations', {
-  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  id: uuid('id')
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
   name: text('name').notNull(),
   createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -152,7 +154,9 @@ export const orgMembers = pgTable(
 export const scopes = pgTable(
   'scopes',
   {
-    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
     type: text('type').notNull(),
     name: text('name').notNull(),
     orgId: uuid('org_id').references(() => organizations.id, { onDelete: 'cascade' }),
@@ -160,8 +164,12 @@ export const scopes = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    uniqueIndex('scopes_personal_unique').on(t.userId).where(sql`type = 'personal'`),
-    uniqueIndex('scopes_org_unique').on(t.orgId).where(sql`type = 'organization'`),
+    uniqueIndex('scopes_personal_unique')
+      .on(t.userId)
+      .where(sql`type = 'personal'`),
+    uniqueIndex('scopes_org_unique')
+      .on(t.orgId)
+      .where(sql`type = 'organization'`),
     unique('scopes_id_org_id_unique').on(t.id, t.orgId),
     index('scopes_org_idx').on(t.orgId),
     check('scopes_type_check', sql`${t.type} IN ('personal', 'organization', 'workspace', 'team', 'project')`),
@@ -200,7 +208,9 @@ export const scopeMembers = pgTable(
 export const apiKeys = pgTable(
   'api_keys',
   {
-    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
     userId: uuid('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
@@ -218,7 +228,9 @@ export const apiKeys = pgTable(
 export const memories = pgTable(
   'memories',
   {
-    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
     scopeId: uuid('scope_id')
       .notNull()
       .references(() => scopes.id, { onDelete: 'cascade' }),
@@ -228,13 +240,17 @@ export const memories = pgTable(
     sensitivity: text('sensitivity').notNull().default('normal'),
     sourceApp: text('source_app').notNull().default('dashboard'),
     tags,
-    metadata: jsonb('metadata').notNull().default(sql`'{}'`),
+    metadata: jsonb('metadata')
+      .notNull()
+      .default(sql`'{}'`),
     createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
     apiKeyId: uuid('api_key_id').references(() => apiKeys.id, { onDelete: 'set null' }),
     embedding: vector('embedding'),
     embeddingModel: text('embedding_model'),
     embeddingDimensions: integer('embedding_dimensions').generatedAlwaysAs(sql`vector_dims(embedding)`),
-    tsv: tsvector('tsv').notNull().default(sql`to_tsvector('english', '')`),
+    tsv: tsvector('tsv')
+      .notNull()
+      .default(sql`to_tsvector('english', '')`),
     expiresAt: timestamp('expires_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
@@ -246,13 +262,21 @@ export const memories = pgTable(
     index('memories_scope_created_active_idx')
       .on(t.scopeId, t.createdAt.desc())
       .where(sql`deleted_at IS NULL`),
-    index('memories_tsv_active_idx').using('gin', t.tsv).where(sql`deleted_at IS NULL`),
-    index('memories_tags_active_idx').using('gin', t.tags).where(sql`deleted_at IS NULL`),
-    index('memories_created_active_idx').on(t.createdAt.desc()).where(sql`deleted_at IS NULL`),
+    index('memories_tsv_active_idx')
+      .using('gin', t.tsv)
+      .where(sql`deleted_at IS NULL`),
+    index('memories_tags_active_idx')
+      .using('gin', t.tags)
+      .where(sql`deleted_at IS NULL`),
+    index('memories_created_active_idx')
+      .on(t.createdAt.desc())
+      .where(sql`deleted_at IS NULL`),
     index('memories_expires_idx')
       .on(t.expiresAt)
       .where(sql`expires_at IS NOT NULL AND deleted_at IS NULL`),
-    index('memories_deleted_idx').on(t.deletedAt).where(sql`deleted_at IS NOT NULL`),
+    index('memories_deleted_idx')
+      .on(t.deletedAt)
+      .where(sql`deleted_at IS NOT NULL`),
     check('memories_kind_check', sql`${t.kind} IN ('explicit', 'inferred')`),
     check('memories_confidence_check', sql`${t.confidence} >= 0 AND ${t.confidence} <= 1`),
     check('memories_sensitivity_check', sql`${t.sensitivity} IN ('low', 'normal', 'high')`),
@@ -272,11 +296,17 @@ export const auditLogs = pgTable(
     memoryId: uuid('memory_id'),
     scopeId: uuid('scope_id'),
     orgId: uuid('org_id'),
-    details: jsonb('details').notNull().default(sql`'{}'`),
+    details: jsonb('details')
+      .notNull()
+      .default(sql`'{}'`),
   },
   (t) => [
-    index('audit_org_idx').on(t.orgId, t.occurredAt.desc()).where(sql`org_id IS NOT NULL`),
+    index('audit_org_idx')
+      .on(t.orgId, t.occurredAt.desc())
+      .where(sql`org_id IS NOT NULL`),
     index('audit_actor_idx').on(t.actorUserId, t.occurredAt.desc()),
-    index('audit_memory_idx').on(t.memoryId).where(sql`memory_id IS NOT NULL`),
+    index('audit_memory_idx')
+      .on(t.memoryId)
+      .where(sql`memory_id IS NOT NULL`),
   ],
 );

@@ -40,15 +40,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const clearPrivateCache = useCallback(async () => {
     // Keep deployment metadata: it is public and Login/Signup may already be
     // fetching it while the anonymous /auth/me request settles.
-    await globalMutate((key) => key !== keys.me && key !== keys.meta, undefined, { revalidate: false });
+    await globalMutate((key) => key !== keys.me && key !== keys.meta, undefined, {
+      revalidate: false,
+    });
   }, [globalMutate]);
 
   const clearSessionCache = useCallback(async () => {
     await globalMutate(() => true, undefined, { revalidate: false });
   }, [globalMutate]);
 
-  const identityTransition =
-    currentUserId !== undefined && (!cacheOwnerKnown || cacheOwnerId !== currentUserId);
+  const identityTransition = currentUserId !== undefined && (!cacheOwnerKnown || cacheOwnerId !== currentUserId);
 
   useEffect(() => {
     if (currentUserId === undefined) return;
@@ -96,8 +97,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Never mount account B over account A's cache. The transition renders a
       // neutral loading screen until every private SWR entry has been evicted.
       user: unauthorized || authCheckFailed || identityTransition ? null : (data?.user ?? null),
-      personalScopeId:
-        unauthorized || authCheckFailed || identityTransition ? null : (data?.personalScopeId ?? null),
+      personalScopeId: unauthorized || authCheckFailed || identityTransition ? null : (data?.personalScopeId ?? null),
       loading: isLoading || identityTransition,
       // A 401 is the normal anonymous state. Any other failed session check
       // fails closed: another tab may have replaced the cookie, so cached

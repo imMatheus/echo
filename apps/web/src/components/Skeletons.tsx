@@ -100,10 +100,7 @@ export function PreviewCardSkeleton() {
 /** Generic bordered data table: h-10 header row + 40px body rows. */
 export function TableSkeleton({ rows = 5 }: { rows?: number }) {
   return (
-    <div
-      className="overflow-hidden rounded-xl border bg-card shadow-card dark:shadow-none"
-      aria-hidden
-    >
+    <div className="overflow-hidden rounded-xl border bg-card shadow-card dark:shadow-none" aria-hidden>
       <div className="flex h-10 items-center border-b px-4">
         <Skeleton className="h-3.5 w-40 max-w-full" />
       </div>

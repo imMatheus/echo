@@ -43,7 +43,14 @@ export default function CheckEmailPage() {
         <div className="flex flex-col items-center gap-2 text-center">
           <h1 className="font-heading text-2xl font-bold">Check your email</h1>
           <p className="text-sm text-balance text-muted-foreground">
-            We sent a verification link{email ? <> to <strong>{email}</strong></> : null}. It expires in 24 hours.
+            We sent a verification link
+            {email ? (
+              <>
+                {' '}
+                to <strong>{email}</strong>
+              </>
+            ) : null}
+            . It expires in 24 hours.
           </p>
         </div>
         {sent && (
@@ -65,7 +72,9 @@ export default function CheckEmailPage() {
           </Field>
         )}
         <FieldDescription className="text-center">
-          <Link to="/login" className="underline underline-offset-4">Back to login</Link>
+          <Link to="/login" className="underline underline-offset-4">
+            Back to login
+          </Link>
         </FieldDescription>
       </FieldGroup>
     </AuthLayout>

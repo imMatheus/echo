@@ -19,13 +19,7 @@ import { MemoryGridSkeleton } from './Skeletons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useDebouncedValue } from '@/lib/use-debounced';
 import { cn } from '@/lib/utils';
 
@@ -35,10 +29,7 @@ const PAGE_SIZE = 24;
 /** Responsive card grid: 1 column on phones, 2 on tablets, 3 on large screens. */
 const CARD_GRID = 'grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3';
 
-const KIND_ITEMS = [
-  { value: 'all', label: 'All kinds' },
-  ...MEMORY_KINDS.map((k) => ({ value: k, label: k })),
-];
+const KIND_ITEMS = [{ value: 'all', label: 'All kinds' }, ...MEMORY_KINDS.map((k) => ({ value: k, label: k }))];
 
 export function MemoryCard({ memory, scorePill }: { memory: Memory; scorePill?: ReactNode }) {
   const location = useLocation();
@@ -119,10 +110,7 @@ export function MemoryBrowser({
   const scopeIdSignature = useMemo(() => [...accessibleScopeIds].sort().join('|'), [accessibleScopeIds]);
   const previousScopeIdSignature = useRef(scopeIdSignature);
 
-  const scopeItems = scopeSelectItems(
-    scopes,
-    allowAllScopes ? [{ value: 'all', label: 'All scopes' }] : undefined,
-  );
+  const scopeItems = scopeSelectItems(scopes, allowAllScopes ? [{ value: 'all', label: 'All scopes' }] : undefined);
 
   // Only the free-text filters are debounced; scope/kind/pagination fetch immediately.
   const debouncedSourceApp = useDebouncedValue(sourceApp);
@@ -157,10 +145,7 @@ export function MemoryBrowser({
     error: searchError,
     isValidating: searching,
     mutate: mutateSearch,
-  } = useMemorySearch(
-    searchReq?.query ?? null,
-    searchReq?.scope ?? scopeId,
-  );
+  } = useMemorySearch(searchReq?.query ?? null, searchReq?.scope ?? scopeId);
   // Only treat search as active when the user has submitted one; clearing the
   // request must also hide any cached result for an earlier identical query.
   const search = useMemo(() => {
@@ -248,13 +233,11 @@ export function MemoryBrowser({
   // SWR intentionally retains usable data across transient failures. A 403 or
   // 404 is different: it can mean access was revoked, so cached rows must not
   // remain visible while the scope refresh/reset completes.
-  const listAccessLost =
-    listError instanceof ApiRequestError && (listError.status === 403 || listError.status === 404);
+  const listAccessLost = listError instanceof ApiRequestError && (listError.status === 403 || listError.status === 404);
   const searchAccessLost =
     searchError instanceof ApiRequestError && (searchError.status === 403 || searchError.status === 404);
   const displayedListError = !searchReq && listError && (!listData || listAccessLost) ? listError : null;
-  const displayedSearchError =
-    searchReq && searchError && (!searchData || searchAccessLost) ? searchError : null;
+  const displayedSearchError = searchReq && searchError && (!searchData || searchAccessLost) ? searchError : null;
 
   return (
     <div>
@@ -373,9 +356,7 @@ export function MemoryBrowser({
                     className="border-success/35 bg-success/10 text-success"
                     title={`score ${result.score.toFixed(4)}`}
                   >
-                    {result.similarity != null
-                      ? `${Math.round(result.similarity * 100)}% match`
-                      : `match #${i + 1}`}
+                    {result.similarity != null ? `${Math.round(result.similarity * 100)}% match` : `match #${i + 1}`}
                   </Badge>
                 }
               />

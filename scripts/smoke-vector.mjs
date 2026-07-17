@@ -5,17 +5,27 @@ const BASE = (process.env.ECHO_BASE_URL ?? 'http://127.0.0.1:3247').replace(/\/+
 const DATABASE_URL = process.env.DATABASE_URL || 'postgres://echo:echo@localhost:5433/echo';
 const MOCK_BASE = (process.env.MOCK_EMBEDDINGS_URL ?? 'http://127.0.0.1:9999').replace(/\/+$/, '');
 const RUN = `vec-${Date.now().toString(36)}`;
-let passed = 0, failed = 0;
+let passed = 0,
+  failed = 0;
 const check = (name, cond, extra = '') => {
-  if (cond) { passed++; console.log(`  ok   ${name}`); }
-  else { failed++; console.log(`  FAIL ${name} ${extra}`); }
+  if (cond) {
+    passed++;
+    console.log(`  ok   ${name}`);
+  } else {
+    failed++;
+    console.log(`  FAIL ${name} ${extra}`);
+  }
 };
 
 async function api(method, path, { body, cookie } = {}) {
   const headers = {};
   if (body !== undefined) headers['content-type'] = 'application/json';
   if (cookie) headers.cookie = cookie;
-  const res = await fetch(`${BASE}/api/v1${path}`, { method, headers, body: body && JSON.stringify(body) });
+  const res = await fetch(`${BASE}/api/v1${path}`, {
+    method,
+    headers,
+    body: body && JSON.stringify(body),
+  });
   return { status: res.status, json: await res.json().catch(() => null), res };
 }
 
@@ -54,9 +64,13 @@ const meta = await api('GET', '/meta');
 check('meta reports openai embeddings', meta.json?.embeddings?.provider === 'openai', JSON.stringify(meta.json));
 
 const accountEmail = `${RUN}@example.com`;
-await api('POST', '/auth/signup', { body: { email: accountEmail, password: 'password-123', name: 'Vec' } });
+await api('POST', '/auth/signup', {
+  body: { email: accountEmail, password: 'password-123', name: 'Vec' },
+});
 await markTestAccountVerified(accountEmail);
-const login = await api('POST', '/auth/login', { body: { email: accountEmail, password: 'password-123' } });
+const login = await api('POST', '/auth/login', {
+  body: { email: accountEmail, password: 'password-123' },
+});
 const cookie = `echo_session=${login.res.headers.get('set-cookie').match(/echo_session=([^;]+)/)[1]}`;
 
 const contents = [
@@ -66,15 +80,26 @@ const contents = [
 ];
 for (const content of contents) {
   const r = await api('POST', '/memories', { cookie, body: { content } });
-  check(`stored with embedding model: ${content.slice(0, 25)}...`, r.json?.memory?.embeddingModel === 'openai:text-embedding-3-small', JSON.stringify(r.json?.memory?.embeddingModel));
+  check(
+    `stored with embedding model: ${content.slice(0, 25)}...`,
+    r.json?.memory?.embeddingModel === 'openai:text-embedding-3-small',
+    JSON.stringify(r.json?.memory?.embeddingModel),
+  );
 }
 
 const s1 = await api('POST', '/memories/search', { cookie, body: { query: 'coffee preferences' } });
 check('hybrid mode active', s1.json?.mode === 'hybrid', JSON.stringify(s1.json?.mode));
-check('vector match ranks coffee memory first', s1.json?.results?.[0]?.content?.includes('coffee'), JSON.stringify(s1.json?.results?.map(r => [r.content.slice(0, 30), r.score, r.similarity])));
+check(
+  'vector match ranks coffee memory first',
+  s1.json?.results?.[0]?.content?.includes('coffee'),
+  JSON.stringify(s1.json?.results?.map((r) => [r.content.slice(0, 30), r.score, r.similarity])),
+);
 check('similarity populated', typeof s1.json?.results?.[0]?.similarity === 'number');
 
-const s2 = await api('POST', '/memories/search', { cookie, body: { query: 'terraform deployment approval' } });
+const s2 = await api('POST', '/memories/search', {
+  cookie,
+  body: { query: 'terraform deployment approval' },
+});
 check('finds pipeline memory', s2.json?.results?.[0]?.content?.includes('terraform'));
 
 // Same provider/model labels can legitimately produce different dimensions
@@ -89,9 +114,15 @@ const mixedDimensionSearch = await api('POST', '/memories/search', {
   cookie,
   body: { query: 'dimension compatibility fallback' },
 });
-const mixedDimensionResult = mixedDimensionSearch.json?.results?.find((result) => result.id === shortVector.json?.memory?.id);
+const mixedDimensionResult = mixedDimensionSearch.json?.results?.find(
+  (result) => result.id === shortVector.json?.memory?.id,
+);
 check('mixed-dimension search succeeds', mixedDimensionSearch.status === 200, `status=${mixedDimensionSearch.status}`);
-check('mismatched vector falls back to full-text', mixedDimensionResult?.similarity === null, JSON.stringify(mixedDimensionResult));
+check(
+  'mismatched vector falls back to full-text',
+  mixedDimensionResult?.similarity === null,
+  JSON.stringify(mixedDimensionResult),
+);
 
 // Mutation-time authorization regression: access can be revoked while a slow
 // embedding call is in flight. The eventual write must re-check membership.
@@ -100,7 +131,9 @@ await api('POST', '/auth/signup', {
   body: { email: bobEmail, password: 'password-123', name: 'Vector Bob' },
 });
 await markTestAccountVerified(bobEmail);
-const bobLogin = await api('POST', '/auth/login', { body: { email: bobEmail, password: 'password-123' } });
+const bobLogin = await api('POST', '/auth/login', {
+  body: { email: bobEmail, password: 'password-123' },
+});
 const bobCookie = `echo_session=${bobLogin.res.headers.get('set-cookie').match(/echo_session=([^;]+)/)[1]}`;
 const org = await api('POST', '/orgs', { cookie, body: { name: `Vector Race ${RUN}` } });
 const orgId = org.json.org.id;
@@ -108,7 +141,10 @@ const scopeList = await api('GET', '/scopes', { cookie });
 const orgScope = scopeList.json.scopes.find((scope) => scope.orgId === orgId && scope.type === 'organization');
 const protectedMemory = await api('POST', '/memories', {
   cookie,
-  body: { content: 'revoked search must not reveal this organization memory', scopeId: orgScope.id },
+  body: {
+    content: 'revoked search must not reveal this organization memory',
+    scopeId: orgScope.id,
+  },
 });
 await api('POST', `/orgs/${orgId}/members`, {
   cookie,
@@ -149,7 +185,10 @@ await releaseSlowRequests();
 const revokedCreate = await pendingCreate;
 check('revoked in-flight create is rejected', revokedCreate.status === 404, `status=${revokedCreate.status}`);
 const afterCreateRace = await api('GET', `/memories?scopeId=${orgScope.id}`, { cookie });
-check('revoked in-flight create stores no row', !afterCreateRace.json.memories.some((m) => m.content.includes('revoked create')));
+check(
+  'revoked in-flight create stores no row',
+  !afterCreateRace.json.memories.some((m) => m.content.includes('revoked create')),
+);
 
 await api('POST', `/orgs/${orgId}/members`, {
   cookie,
@@ -170,7 +209,10 @@ await releaseSlowRequests();
 const revokedUpdate = await pendingUpdate;
 check('revoked in-flight update is rejected', revokedUpdate.status === 404, `status=${revokedUpdate.status}`);
 const unchanged = await api('GET', `/memories/${editable.json.memory.id}`, { cookie });
-check('revoked in-flight update leaves content unchanged', unchanged.json.memory.content === 'original content survives revoked update');
+check(
+  'revoked in-flight update leaves content unchanged',
+  unchanged.json.memory.content === 'original content survives revoked update',
+);
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

@@ -53,13 +53,11 @@ const AUTHORIZATION_SNAPSHOT_PREFIXES = new Set([
 ]);
 
 /** Semantic-search snapshots must be evicted without replaying their audited POST. */
-export const isMemorySearchKey = (key: unknown): boolean =>
-  Array.isArray(key) && key[0] === 'memories:search';
+export const isMemorySearchKey = (key: unknown): boolean => Array.isArray(key) && key[0] === 'memories:search';
 
 /** Safe-to-refetch GET snapshots whose visibility depends on scope access. */
 export const isAuthorizationSnapshotKey = (key: unknown): boolean =>
-  key === keys.orgs ||
-  (Array.isArray(key) && AUTHORIZATION_SNAPSHOT_PREFIXES.has(String(key[0])));
+  key === keys.orgs || (Array.isArray(key) && AUTHORIZATION_SNAPSHOT_PREFIXES.has(String(key[0])));
 
 /** Data whose visibility can change when organization membership or role changes. */
 export const isAuthorizationDependentKey = (key: unknown): boolean =>

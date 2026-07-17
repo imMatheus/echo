@@ -61,11 +61,7 @@ async function renderClaimedEmail(app: AppContext, claimed: ClaimedEmail) {
 
   let token: string | null = null;
   if (claimed.authTokenId) {
-    const [stored] = await app.db
-      .select()
-      .from(authTokens)
-      .where(eq(authTokens.id, claimed.authTokenId))
-      .limit(1);
+    const [stored] = await app.db.select().from(authTokens).where(eq(authTokens.id, claimed.authTokenId)).limit(1);
     if (!stored || stored.usedAt || stored.expiresAt <= new Date()) {
       throw new Error('Authentication token is no longer deliverable');
     }

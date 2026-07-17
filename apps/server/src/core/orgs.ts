@@ -32,11 +32,7 @@ export async function requireOrgRole(
   return role;
 }
 
-export async function createOrg(
-  app: AppContext,
-  ctx: AuthContext,
-  input: { name: string },
-): Promise<Organization> {
+export async function createOrg(app: AppContext, ctx: AuthContext, input: { name: string }): Promise<Organization> {
   const org = await app.db.transaction(async (tx) => {
     const [created] = await tx.insert(organizations).values({ name: input.name, createdBy: ctx.userId }).returning();
     await tx.insert(orgMembers).values({ orgId: created.id, userId: ctx.userId, role: 'owner' });
@@ -69,7 +65,11 @@ export async function listOrgs(app: AppContext, userId: string): Promise<Organiz
   return rows.map((r) => ({ ...mapOrg(r), role: r.role as OrgRole, memberCount: r.memberCount }));
 }
 
-export async function getOrg(app: AppContext, orgId: string, userId: string): Promise<{ org: Organization; role: OrgRole }> {
+export async function getOrg(
+  app: AppContext,
+  orgId: string,
+  userId: string,
+): Promise<{ org: Organization; role: OrgRole }> {
   const role = await getOrgRole(app, orgId, userId);
   if (!role) throw notFound('Organization not found');
   const [row] = await app.db.select().from(organizations).where(eq(organizations.id, orgId)).limit(1);
@@ -89,11 +89,7 @@ export async function renameOrg(app: AppContext, ctx: AuthContext, orgId: string
     if (membership.role !== 'owner') {
       throw forbidden('Your role in this organization does not allow that');
     }
-    const [updated] = await tx
-      .update(organizations)
-      .set({ name })
-      .where(eq(organizations.id, orgId))
-      .returning();
+    const [updated] = await tx.update(organizations).set({ name }).where(eq(organizations.id, orgId)).returning();
     if (!updated) throw notFound('Organization not found');
     // Keep the org-level scope's display name in sync atomically.
     await tx
@@ -458,7 +454,12 @@ export async function listScopeMembers(app: AppContext, ctx: AuthContext, scopeI
       .innerJoin(users, eq(users.id, orgMembers.userId))
       .where(eq(orgMembers.orgId, scope.orgId))
       .orderBy(orgMembers.createdAt);
-    return rows.map((r) => ({ userId: r.userId, email: r.email, name: r.name, addedAt: r.createdAt.toISOString() }));
+    return rows.map((r) => ({
+      userId: r.userId,
+      email: r.email,
+      name: r.name,
+      addedAt: r.createdAt.toISOString(),
+    }));
   }
   const rows = await app.db
     .select({
@@ -471,10 +472,20 @@ export async function listScopeMembers(app: AppContext, ctx: AuthContext, scopeI
     .innerJoin(users, eq(users.id, scopeMembers.userId))
     .where(eq(scopeMembers.scopeId, scopeId))
     .orderBy(scopeMembers.createdAt);
-  return rows.map((r) => ({ userId: r.userId, email: r.email, name: r.name, addedAt: r.createdAt.toISOString() }));
+  return rows.map((r) => ({
+    userId: r.userId,
+    email: r.email,
+    name: r.name,
+    addedAt: r.createdAt.toISOString(),
+  }));
 }
 
-export async function addScopeMember(app: AppContext, ctx: AuthContext, scopeId: string, email: string): Promise<ScopeMember> {
+export async function addScopeMember(
+  app: AppContext,
+  ctx: AuthContext,
+  scopeId: string,
+  email: string,
+): Promise<ScopeMember> {
   const scope = await getOrgScopeOrThrow(app, scopeId);
   const result = await app.db.transaction(async (tx) => {
     await tx.execute(sql`SELECT id FROM organizations WHERE id = ${scope.orgId} FOR UPDATE`);
@@ -530,7 +541,12 @@ export async function addScopeMember(app: AppContext, ctx: AuthContext, scopeId:
   };
 }
 
-export async function removeScopeMember(app: AppContext, ctx: AuthContext, scopeId: string, targetUserId: string): Promise<void> {
+export async function removeScopeMember(
+  app: AppContext,
+  ctx: AuthContext,
+  scopeId: string,
+  targetUserId: string,
+): Promise<void> {
   const scope = await getOrgScopeOrThrow(app, scopeId);
   await app.db.transaction(async (tx) => {
     await tx.execute(sql`SELECT id FROM organizations WHERE id = ${scope.orgId} FOR UPDATE`);
