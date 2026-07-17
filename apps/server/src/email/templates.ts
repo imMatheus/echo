@@ -56,10 +56,10 @@ export function renderAuthEmail(input: {
       html: shell(
         'Verify your Echo email address',
         'Verify your email address',
-        `<p>${greeting}</p><p>Confirm this email address to finish creating your Echo account. This link expires in 24 hours and can only be used once.</p>`,
+        `<p>${greeting}</p><p>Confirm this email address to finish creating your Echo account. This link will expire in 24 hours and can only be used once.</p>`,
         { label: 'Verify email', href: url },
       ),
-      text: `Hi ${input.name},\n\nConfirm this email address to finish creating your Echo account. This link expires in 24 hours and can only be used once.\n\n${url}\n\nIf you did not create an Echo account, you can ignore this email.`,
+      text: `Hi ${input.name},\n\nConfirm this email address to finish creating your Echo account. This link will expire in 24 hours and can only be used once.\n\n${url}\n\nIf you did not create an Echo account, you can ignore this email.`,
       idempotencyKey: input.idempotencyKey,
     };
   }
