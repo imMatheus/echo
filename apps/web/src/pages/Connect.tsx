@@ -244,6 +244,7 @@ export default function ConnectPage() {
             <TabsList className="max-w-full justify-start overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               <TabsTrigger value="claude-code">Claude Code</TabsTrigger>
               <TabsTrigger value="claude-desktop">Claude Desktop</TabsTrigger>
+              <TabsTrigger value="devin-desktop">Devin Desktop</TabsTrigger>
               <TabsTrigger value="cursor">Cursor</TabsTrigger>
               <TabsTrigger value="codex">Codex CLI</TabsTrigger>
               <TabsTrigger value="chatgpt">ChatGPT</TabsTrigger>
@@ -268,6 +269,22 @@ export default function ConnectPage() {
                 label={
                   <>
                     Add to <code className={INLINE_CODE}>claude_desktop_config.json</code>
+                  </>
+                }
+              >
+                <CodeBlock code={stdioConfig} />
+              </Labeled>
+            </TabsContent>
+
+            <TabsContent value="devin-desktop" className="flex flex-col gap-3.5 pt-1.5">
+              <p className="max-w-prose text-muted-foreground">
+                Devin Desktop connects over stdio through the local bridge included in the Echo repo.
+              </p>
+              <BridgeBuildBlock />
+              <Labeled
+                label={
+                  <>
+                    Add to <code className={INLINE_CODE}>devin_desktop_config.json</code>
                   </>
                 }
               >
