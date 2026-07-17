@@ -20,14 +20,12 @@ const boolString = z.enum(['true', 'false', '1', '0']).transform((v) => v === 't
 const EnvSchema = z.object({
   /** Generic application database connection URL. */
   DATABASE_URL: z.string().trim().min(1).default(DEFAULT_DATABASE_URL),
-  /** Exact browser dashboard origin permitted to make credentialed API requests. */
-  WEB_ORIGIN: z.string().trim().url().default('http://localhost:5173'),
+  /** Public URL of this deployment; used for CORS, origin validation, email links, and Secure cookies. */
+  APP_URL: z.string().trim().url().default('http://localhost:5173'),
   /** `none` is required only when web and API are on different sites. */
   COOKIE_SAME_SITE: z.enum(['lax', 'none']).default('lax'),
   PORT: z.coerce.number().int().min(1).max(65_535).default(8080),
   HOST: z.string().trim().min(1).default('0.0.0.0'),
-  /** Public URL of this deployment; used to mark session cookies Secure when https. */
-  APP_URL: z.string().trim().url().optional(),
   DISABLE_SIGNUP: boolString.default('false'),
   SESSION_TTL_DAYS: z.coerce.number().int().min(1).max(3650).default(30),
   EMAIL_PROVIDER: z.enum(['console', 'resend']).default('console'),
@@ -62,7 +60,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     throw new Error(`Invalid environment configuration: ${issues}`);
   }
   const cfg = parsed.data;
-  const webOrigin = new URL(cfg.WEB_ORIGIN).origin;
+  const appOrigin = new URL(cfg.APP_URL).origin;
   if (cfg.EMBEDDINGS_PROVIDER === 'openai' && !cfg.OPENAI_API_KEY) {
     throw new Error('EMBEDDINGS_PROVIDER=openai requires OPENAI_API_KEY');
   }
@@ -90,7 +88,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   }
   return {
     ...cfg,
-    WEB_ORIGIN: webOrigin,
+    APP_URL: appOrigin,
     secureCookies,
   };
 }

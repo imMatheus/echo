@@ -37,7 +37,7 @@ export async function buildApp(app: AppContext): Promise<FastifyInstance> {
 
   await f.register(fastifyCors, {
     credentials: true,
-    origin: (origin, callback) => callback(null, !origin || origin === app.config.WEB_ORIGIN),
+    origin: (origin, callback) => callback(null, !origin || origin === app.config.APP_URL),
   });
 
   // CORS prevents script reads, but a cross-site form can still issue a simple
@@ -46,7 +46,7 @@ export async function buildApp(app: AppContext): Promise<FastifyInstance> {
   f.addHook('onRequest', async (req) => {
     if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return;
     const origin = req.headers.origin;
-    if (origin && origin !== app.config.WEB_ORIGIN) {
+    if (origin && origin !== app.config.APP_URL) {
       throw new HttpError('forbidden', 'Origin is not allowed');
     }
   });

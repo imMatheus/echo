@@ -44,8 +44,7 @@ AUTH_TOKEN_SECRET=<unique 32+ character value>
 RESEND_API_KEY=re_...
 
 # Environment
-APP_URL=https://app.example.com     # your Vercel dashboard URL
-WEB_ORIGIN=https://app.example.com  # same URL; the only origin allowed to call the API
+APP_URL=https://app.example.com     # your Vercel dashboard URL (used for CORS, origin validation, email links, and Secure cookies)
 TRUST_PROXY=true
 COOKIE_SAME_SITE=lax                 # use `none` if the Vercel and Cloud Run domains share no parent domain
 EMAIL_PROVIDER=resend
