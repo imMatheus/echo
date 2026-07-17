@@ -7,7 +7,7 @@ Base path: `/api/v1`. All bodies are JSON. All resource JSON uses camelCase and 
 Two authentication mechanisms — memory, scope, organization, audit, and stats endpoints accept either unless noted:
 
 1. **Session cookie** (`echo_session`, httpOnly) — set by `POST /auth/login` or successful `POST /auth/verify-email`. Used by the dashboard.
-2. **API key** — `Authorization: Bearer eck_...` header. Keys are created in the dashboard and act as the user who created them. Used by the MCP server, the stdio bridge, and any integration.
+2. **API key** — `Authorization: Bearer eck_...` header. Keys are created in the dashboard and act as the user who created them. Used by the MCP server and any integration.
 
 Only verified accounts can receive sessions, use API keys, or be added to organizations and scopes.
 
@@ -91,4 +91,4 @@ Note on connected-app read auditing: `memory.recall` and `memory.list` events ar
 
 - `POST /mcp` — Streamable HTTP MCP endpoint (stateless). Authenticate with `Authorization: Bearer eck_...`.
 - Tools: `remember_context`, `recall_context`, `list_context`, `forget_context`, `list_scopes`.
-- Clients that only support stdio can use the locally built bridge in `packages/mcp-bridge`; it is not currently published to npm.
+- Every MCP client connects to `POST /mcp` directly over HTTP with the `Authorization: Bearer eck_...` header — no local bridge or install.

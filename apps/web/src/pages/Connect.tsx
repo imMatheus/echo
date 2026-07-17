@@ -64,9 +64,6 @@ const MCP_TOOLS = [
 
 const INLINE_CODE = 'rounded bg-muted px-1 py-px font-mono text-[0.7rem]';
 
-const BRIDGE_PATH = '/absolute/path/to/echo/packages/mcp-bridge/dist/index.js';
-const BRIDGE_BUILD = ['cd /absolute/path/to/echo', 'bun install', 'bun run --filter echo-context-mcp build'].join('\n');
-
 /** One entry in the numbered setup rail. */
 function Step({
   number,
@@ -105,15 +102,6 @@ function Labeled({ label, children }: { label: ReactNode; children: ReactNode })
   );
 }
 
-/** Shared "build the stdio bridge" instructions for clients that can't speak remote MCP. */
-function BridgeBuildBlock() {
-  return (
-    <Labeled label="Build the bridge once, from your trusted Echo source checkout">
-      <CodeBlock code={BRIDGE_BUILD} />
-    </Labeled>
-  );
-}
-
 export default function ConnectPage() {
   const { data: meta } = useMeta();
   const { data: keys, error, mutate } = useApiKeys();
@@ -138,16 +126,12 @@ export default function ConnectPage() {
   const apiKey = generated?.secret ?? 'YOUR_API_KEY';
   const hasKey = generated !== null;
 
-  const stdioConfig = JSON.stringify(
+  const cursorConfig = JSON.stringify(
     {
       mcpServers: {
         echo: {
-          command: 'node',
-          args: [BRIDGE_PATH],
-          env: {
-            ECHO_URL: serverOrigin,
-            ECHO_API_KEY: apiKey,
-          },
+          url: MCP_URL,
+          headers: { Authorization: `Bearer ${apiKey}` },
         },
       },
     },
@@ -157,9 +141,8 @@ export default function ConnectPage() {
 
   const codexConfig = [
     '[mcp_servers.echo]',
-    'command = "node"',
-    `args = ["${BRIDGE_PATH}"]`,
-    `env = { ECHO_URL = "${serverOrigin}", ECHO_API_KEY = "${apiKey}" }`,
+    `url = "${MCP_URL}"`,
+    `bearer_token = "${apiKey}"`,
   ].join('\n');
 
   const revoke = async () => {
@@ -178,14 +161,14 @@ export default function ConnectPage() {
     <div>
       <PageHeader
         title="Connect"
-        subtitle="Give Claude, Cursor, or any MCP client a shared memory on this Echo server — create a key, drop it into your app, and you're connected."
+        subtitle="Give Claude, Cursor, or any MCP client a shared memory on this Echo server. Setup takes about a minute: create a key, drop it into your app, and say “remember this”."
       />
 
       <ol>
         <Step
           number={1}
           title="Create your API key"
-          description="Every connected app authenticates with a bearer key. Generate one here — it's dropped straight into the setup snippet in the next step."
+          description="Every connected app authenticates with a bearer key. A key acts as you: it can read and write your personal scope and every organization scope you have access to. Generate one per app or device — it's dropped straight into the setup snippets in the next step, and you can revoke it any time below."
         >
           {generated ? (
             <div className="flex flex-col gap-3">
@@ -228,14 +211,14 @@ export default function ConnectPage() {
           description={
             hasKey ? (
               <>
-                Pick your app below — your new key is already filled into each snippet. For stdio clients, replace{' '}
-                <code className={INLINE_CODE}>/absolute/path/to/echo</code> with your checkout's absolute path.
+                Pick your app below — your new key is already filled into each snippet. Every client connects straight
+                to this server over HTTP with your key as a bearer token; nothing runs locally.
               </>
             ) : (
               <>
                 Pick your app below, then replace <code className={INLINE_CODE}>YOUR_API_KEY</code> with the key from
-                step 1. For stdio clients, also replace <code className={INLINE_CODE}>/absolute/path/to/echo</code> with
-                your checkout's absolute path.
+                step 1. Every client connects straight to this server over HTTP with your key as a bearer token;
+                nothing runs locally.
               </>
             )
           }
@@ -253,7 +236,8 @@ export default function ConnectPage() {
 
             <TabsContent value="claude-code" className="flex flex-col gap-3.5 pt-1.5">
               <p className="max-w-prose text-muted-foreground">
-                Run this in a terminal — it registers Echo as a remote MCP server for Claude Code.
+                Run this in a terminal — it registers Echo as a remote MCP server for the current project. Add{' '}
+                <code className={INLINE_CODE}>--scope user</code> to make it available in all your projects.
               </p>
               <CodeBlock
                 code={`claude mcp add --transport http echo ${MCP_URL} --header "Authorization: Bearer ${apiKey}"`}
@@ -262,41 +246,43 @@ export default function ConnectPage() {
 
             <TabsContent value="claude-desktop" className="flex flex-col gap-3.5 pt-1.5">
               <p className="max-w-prose text-muted-foreground">
-                Claude Desktop only speaks stdio, so it connects through the local bridge included in the Echo repo.
+                In Claude Desktop, go to Settings → Connectors → Add custom connector, paste the endpoint below, and
+                add the authorization header under the connector's advanced/header settings.
               </p>
-              <BridgeBuildBlock />
-              <Labeled
-                label={
-                  <>
-                    Add to <code className={INLINE_CODE}>claude_desktop_config.json</code>
-                  </>
-                }
-              >
-                <CodeBlock code={stdioConfig} />
+              {needsPublicConnectorUrl && (
+                <Alert>
+                  <CircleAlertIcon />
+                  <AlertTitle>Use a publicly reachable HTTPS URL</AlertTitle>
+                  <AlertDescription>
+                    {serverOrigin} is local or non-HTTPS and can't be used as a remote connector. Deploy Echo behind
+                    HTTPS and use that host below.
+                  </AlertDescription>
+                </Alert>
+              )}
+              <Labeled label="Connector endpoint">
+                <CodeBlock code={MCP_URL} />
+              </Labeled>
+              <Labeled label="Authorization header">
+                <CodeBlock code={`Authorization: Bearer ${apiKey}`} />
               </Labeled>
             </TabsContent>
 
             <TabsContent value="devin-desktop" className="flex flex-col gap-3.5 pt-1.5">
               <p className="max-w-prose text-muted-foreground">
-                Devin Desktop connects over stdio through the local bridge included in the Echo repo.
+                Register Echo as a remote MCP server with the Devin CLI — the URL selects HTTP transport
+                automatically.
               </p>
-              <BridgeBuildBlock />
-              <Labeled
-                label={
-                  <>
-                    Add to <code className={INLINE_CODE}>devin_desktop_config.json</code>
-                  </>
-                }
-              >
-                <CodeBlock code={stdioConfig} />
-              </Labeled>
+              <CodeBlock
+                code={`devin mcp add echo ${MCP_URL} --header "Authorization: Bearer ${apiKey}"`}
+              />
             </TabsContent>
 
             <TabsContent value="cursor" className="flex flex-col gap-3.5 pt-1.5">
               <p className="max-w-prose text-muted-foreground">
-                Cursor connects over stdio through the local bridge included in the Echo repo.
+                Add the config below to <code className={INLINE_CODE}>.cursor/mcp.json</code> in a project (or{' '}
+                <code className={INLINE_CODE}>~/.cursor/mcp.json</code> for all projects), then enable Echo under
+                Cursor Settings → MCP.
               </p>
-              <BridgeBuildBlock />
               <Labeled
                 label={
                   <>
@@ -304,15 +290,14 @@ export default function ConnectPage() {
                   </>
                 }
               >
-                <CodeBlock code={stdioConfig} />
+                <CodeBlock code={cursorConfig} />
               </Labeled>
             </TabsContent>
 
             <TabsContent value="codex" className="flex flex-col gap-3.5 pt-1.5">
               <p className="max-w-prose text-muted-foreground">
-                Codex CLI connects over stdio through the local bridge included in the Echo repo.
+                Codex CLI connects to Echo's remote endpoint over HTTP. Add the config below.
               </p>
-              <BridgeBuildBlock />
               <Labeled
                 label={
                   <>

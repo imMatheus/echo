@@ -3,7 +3,7 @@
  * context layer for AI apps.
  *
  * The types describe the REST API surface exactly as the server returns it
- * (camelCase JSON). The dashboard, the MCP stdio bridge, and any third-party
+ * (camelCase JSON). The dashboard, the MCP server, and any third-party
  * client can rely on them.
  */
 

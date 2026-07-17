@@ -4,11 +4,11 @@ Echo is an open-source, self-hostable memory layer that lets AI tools — Claude
 
 ```
   Claude Code ─┐                       ┌────────────────────────────┐
-  Claude.ai ───┤    MCP (HTTP or      │  Echo server               │
-  Cursor ──────┼──  stdio bridge) ──▶ │  · REST API + MCP endpoint │──▶ Postgres + pgvector
-  ChatGPT ─────┤                      │  · scoped access control   │
-  anything ────┘                      │  · audit log · dashboard   │
-                                      └────────────────────────────┘
+  Claude.ai ───┤                       │  Echo server               │
+  Cursor ──────┼──  MCP over HTTP ──▶  │  · REST API + MCP endpoint │──▶ Postgres + pgvector
+  ChatGPT ─────┤    (bearer token)     │  · scoped access control   │
+  anything ────┘                       │  · audit log · dashboard   │
+                                       └────────────────────────────┘
 ```
 
 ## Why
@@ -70,30 +70,20 @@ claude mcp add --transport http echo http://localhost:8080/mcp \
   --header "Authorization: Bearer eck_..."
 ```
 
-**Claude Desktop, Cursor, or any stdio-only MCP client**
-
-The stdio bridge is not published to npm yet. Build the reviewed local source instead of running an unclaimed package name:
-
-```bash
-bun install
-bun run --filter echo-context-mcp build
-```
-
-Then configure the client (Node.js 20 or newer) with the absolute path to the built file:
+**Cursor** — add to `.cursor/mcp.json` (or `~/.cursor/mcp.json`):
 
 ```json
 {
   "mcpServers": {
     "echo": {
-      "command": "node",
-      "args": ["/absolute/path/to/echo/packages/mcp-bridge/dist/index.js"],
-      "env": { "ECHO_URL": "http://localhost:8080", "ECHO_API_KEY": "eck_..." }
+      "url": "http://localhost:8080/mcp",
+      "headers": { "Authorization": "Bearer eck_..." }
     }
   }
 }
 ```
 
-**Any remote-MCP client** — point it at `POST /mcp` with the `Authorization: Bearer eck_...` header.
+**Any other MCP client** — point it at `POST /mcp` with the `Authorization: Bearer eck_...` header. The dashboard's **Connect** page has ready-to-paste snippets for Claude Desktop, Devin, Codex, ChatGPT, and more.
 
 ### MCP tools
 
@@ -176,7 +166,6 @@ apps/server         Fastify API, MCP endpoint, Drizzle schema + migrations, acce
 apps/server/drizzle Generated SQL migrations, applied on boot before resumable concurrent index maintenance
 apps/web            React dashboard (memories, orgs, API keys, audit, connect)
 packages/shared     Types shared by server, dashboard, and integrations
-packages/mcp-bridge echo-context-mcp — stdio bridge for local-only MCP clients
 docs/API.md         Full REST API reference
 ```
 

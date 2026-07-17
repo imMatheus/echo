@@ -7,7 +7,7 @@
   "packageManager": "bun@1.3.9",
   "private": true,
   "scripts": {
-    "build": "bun run --filter echo-context-mcp --filter @echo/web build",
+    "build": "bun run --filter @echo/web build",
     "dev": "bun run --parallel --filter @echo/server --filter @echo/web dev",
     "dev:server": "bun run --filter @echo/server dev",
     "dev:web": "bun run --filter @echo/web dev",
