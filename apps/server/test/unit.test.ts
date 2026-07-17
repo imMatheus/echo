@@ -20,6 +20,8 @@ import { renderAuthEmail } from '@/email/templates';
 import { toVectorLiteral } from '@/lib/embeddings';
 import { isUniqueViolation } from '@/lib/postgres';
 import { escapeLikePattern } from '@/lib/sql';
+import { notFound } from '@/lib/http-error';
+import { runTool } from '@/mcp/tools';
 import type { AppContext } from '@/types';
 
 describe('password hashing', () => {
@@ -293,6 +295,45 @@ describe('cross-origin dashboard access', () => {
     } finally {
       await app.close();
     }
+  });
+});
+
+describe('mcp tool error handling', () => {
+  const makeApp = () => {
+    const errors: unknown[] = [];
+    const app = {
+      log: { error: (obj: unknown) => errors.push(obj) },
+    } as unknown as AppContext;
+    return { app, errors };
+  };
+
+  it('maps an HttpError to a client-safe tool error without logging', async () => {
+    const { app, errors } = makeApp();
+    const result = await runTool(app, async () => {
+      throw notFound('Scope not found');
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toBe('Error: Scope not found');
+    expect(errors).toHaveLength(0);
+  });
+
+  it('logs unexpected errors and hides their detail from the client', async () => {
+    const { app, errors } = makeApp();
+    const result = await runTool(app, async () => {
+      throw new Error('connection terminated: password authentication failed');
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toBe('Error: Internal error');
+    expect(result.content[0].text).not.toContain('password');
+    expect(errors).toHaveLength(1);
+    expect((errors[0] as { err: Error }).err).toBeInstanceOf(Error);
+  });
+
+  it('returns the successful result unchanged', async () => {
+    const { app } = makeApp();
+    const result = await runTool(app, async () => ({ content: [{ type: 'text' as const, text: 'ok' }] }));
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toBe('ok');
   });
 });
 
