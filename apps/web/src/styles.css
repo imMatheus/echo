@@ -31,6 +31,7 @@
 
   body {
     @apply bg-background font-sans text-foreground antialiased;
+    overflow-x: clip;
   }
 
   * {
@@ -39,6 +40,8 @@
 
   html {
     @apply font-sans;
+    min-width: 320px;
+    text-size-adjust: 100%;
   }
 }
 

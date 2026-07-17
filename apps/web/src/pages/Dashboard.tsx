@@ -278,8 +278,8 @@ function SourceAppsChart({ stats }: { stats: UsageStats }) {
           // Column headers line up with the row number cells below: same w-16
           // widths, and header + content share the card's horizontal padding.
           <CardAction className="flex items-center text-[10px] font-medium tracking-wider text-muted-foreground uppercase">
-            <span className="w-16 text-right">Share</span>
-            <span className="w-16 text-right">Events</span>
+            <span className="w-16 text-right max-sm:hidden">Share</span>
+            <span className="w-16 text-right max-sm:w-14">Events</span>
           </CardAction>
         )}
       </CardHeader>
@@ -308,8 +308,10 @@ function SourceAppsChart({ stats }: { stats: UsageStats }) {
                       {row.sourceApp}
                     </span>
                   </div>
-                  <span className="w-16 shrink-0 text-right text-xs tabular-nums text-muted-foreground">{share}%</span>
-                  <span className="w-16 shrink-0 text-right text-sm font-semibold tabular-nums">
+                  <span className="w-16 shrink-0 text-right text-xs tabular-nums text-muted-foreground max-sm:hidden">
+                    {share}%
+                  </span>
+                  <span className="w-16 shrink-0 text-right text-sm font-semibold tabular-nums max-sm:w-14">
                     {compact.format(row.count)}
                   </span>
                 </li>

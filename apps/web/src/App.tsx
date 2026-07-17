@@ -269,7 +269,10 @@ export default function App() {
       >
         <BrowserRouter>
           <AppRoutes />
-          <Toaster position="bottom-right" />
+          <Toaster
+            position="bottom-right"
+            mobileOffset={{ bottom: 'calc(5rem + env(safe-area-inset-bottom))', left: 16, right: 16 }}
+          />
         </BrowserRouter>
       </SWRConfig>
     </ThemeProvider>

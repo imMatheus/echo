@@ -6,14 +6,14 @@ import { LoginForm } from '../components/login-form';
 export function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="grid min-h-svh lg:grid-cols-2">
-      <div className="flex flex-col gap-4 p-6 md:p-10">
-        <div className="flex justify-center gap-2 md:justify-start">
+      <div className="flex min-h-svh flex-col gap-4 p-6 max-sm:p-4 md:p-10">
+        <div className="flex justify-center gap-2 max-sm:justify-start md:justify-start">
           <Link to="/" className="flex items-center gap-2 font-medium">
             <LogoMark size={24} />
             Echo
           </Link>
         </div>
-        <div className="flex flex-1 items-center justify-center">
+        <div className="flex flex-1 items-center justify-center py-8 max-sm:items-start max-sm:py-10">
           <div className="w-full max-w-xs">{children}</div>
         </div>
       </div>

@@ -44,13 +44,13 @@ const NAV_ITEMS = [
   {
     to: '/dashboard',
     label: 'Dashboard',
-    icon: <LayoutDashboardIcon />,
+    icon: LayoutDashboardIcon,
     end: true,
   },
-  { to: '/memories', label: 'Memories', icon: <LayersIcon />, end: false },
-  { to: '/audit', label: 'Audit Log', icon: <ScrollTextIcon />, end: false },
-  { to: '/orgs', label: 'Organizations', icon: <Building2Icon />, end: false },
-  { to: '/connect', label: 'Connect', icon: <ZapIcon />, end: false },
+  { to: '/memories', label: 'Memories', icon: LayersIcon, end: false },
+  { to: '/audit', label: 'Audit Log', icon: ScrollTextIcon, end: false },
+  { to: '/orgs', label: 'Organizations', icon: Building2Icon, end: false },
+  { to: '/connect', label: 'Connect', icon: ZapIcon, end: false },
 ];
 
 export function Layout() {
@@ -69,15 +69,15 @@ export function Layout() {
   };
 
   return (
-    <div className="flex min-h-screen">
+    <div className="min-h-svh sm:flex">
       <a
         href="#main-content"
         className="fixed left-3 top-3 z-50 -translate-y-20 rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground transition-transform focus:translate-y-0"
       >
         Skip to content
       </a>
-      {/* Collapses to an icon rail below md; labels stay for screen readers. */}
-      <aside className="fixed inset-y-0 left-0 z-10 flex w-60 flex-col border-r border-sidebar-border bg-sidebar p-3 pt-4 text-sidebar-foreground max-md:w-14 max-md:p-2 max-md:pt-4">
+      {/* Tablet keeps the compact rail; phones use the app bars below. */}
+      <aside className="fixed inset-y-0 left-0 z-10 flex w-60 flex-col border-r border-sidebar-border bg-sidebar p-3 pt-4 text-sidebar-foreground max-md:w-14 max-md:p-2 max-md:pt-4 max-sm:hidden">
         <div className="flex items-center gap-2.5 px-1 pb-4 max-md:justify-center max-md:px-0">
           <LogoMark />
           <span className="font-heading text-[16px] font-bold tracking-tight max-md:sr-only">Echo</span>
@@ -91,14 +91,14 @@ export function Layout() {
               title={item.label}
               className={({ isActive }) =>
                 cn(
-                  'flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-xs/relaxed font-medium transition-colors max-md:justify-center max-md:px-0 max-md:py-2 [&_svg]:size-3.5 [&_svg]:shrink-0',
+                  'flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-xs/relaxed font-medium transition-colors max-md:min-h-10 max-md:justify-center max-md:px-0 [&_svg]:size-3.5 [&_svg]:shrink-0',
                   isActive
                     ? 'bg-sidebar-accent text-sidebar-accent-foreground [&_svg]:text-sidebar-primary'
                     : 'text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground',
                 )
               }
             >
-              {item.icon}
+              <item.icon />
               <span className="max-md:sr-only">{item.label}</span>
             </NavLink>
           ))}
@@ -119,7 +119,7 @@ export function Layout() {
           <DropdownMenu>
             <DropdownMenuTrigger
               render={
-                <Button variant="ghost" size="icon" title="Settings" aria-label="Settings">
+                <Button variant="ghost" size="icon" className="max-md:size-10" title="Settings" aria-label="Settings">
                   <SettingsIcon />
                 </Button>
               }
@@ -157,15 +157,97 @@ export function Layout() {
           </DropdownMenu>
         </div>
       </aside>
+
+      <header className="sticky top-0 z-30 flex min-h-14 items-center justify-between border-b border-sidebar-border bg-sidebar/95 px-4 pt-[env(safe-area-inset-top)] text-sidebar-foreground backdrop-blur sm:hidden">
+        <div className="flex items-center gap-2.5 font-heading text-[16px] font-bold tracking-tight">
+          <LogoMark size={22} />
+          Echo
+        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon"
+                className="rounded-full"
+                title="Account and settings"
+                aria-label="Account and settings"
+              >
+                <span className="flex size-8 items-center justify-center rounded-full bg-sidebar-primary/15 text-[11px] font-bold text-scope-personal">
+                  {user ? initials(user.name) : '?'}
+                </span>
+              </Button>
+            }
+          />
+          <DropdownMenuContent side="bottom" align="end" className="min-w-56">
+            <div className="min-w-0 px-2 py-2 text-xs text-muted-foreground">
+              <span className="block truncate font-semibold text-foreground">{user?.name}</span>
+              <span className="block truncate text-[11px] font-normal">{user?.email}</span>
+            </div>
+            <DropdownMenuSeparator />
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <SunIcon className="dark:hidden" />
+                <MoonIcon className="hidden dark:block" />
+                Theme
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent>
+                <DropdownMenuRadioGroup value={theme} onValueChange={(value) => setTheme(value)}>
+                  <DropdownMenuRadioItem value="light">
+                    <SunIcon />
+                    Light
+                  </DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="dark">
+                    <MoonIcon />
+                    Dark
+                  </DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="system">
+                    <MonitorIcon />
+                    System
+                  </DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem variant="destructive" onClick={() => void onLogout()}>
+              <LogOutIcon />
+              Log out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </header>
+
       <main
         id="main-content"
         tabIndex={-1}
-        className="ml-60 min-w-0 flex-1 px-10 pb-16 pt-8 outline-none max-md:ml-14 max-md:px-5 max-sm:px-3"
+        className="ml-60 min-w-0 flex-1 px-10 pb-16 pt-8 outline-none max-md:ml-14 max-md:px-5 max-sm:ml-0 max-sm:px-4 max-sm:pt-5 max-sm:pb-[calc(5.5rem+env(safe-area-inset-bottom))]"
       >
         <div className="mx-auto max-w-[960px]">
           <Outlet />
         </div>
       </main>
+
+      <nav
+        aria-label="Primary"
+        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-sidebar-border bg-sidebar/95 pb-[env(safe-area-inset-bottom)] text-sidebar-foreground backdrop-blur sm:hidden"
+      >
+        {NAV_ITEMS.map((item) => (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            end={item.end}
+            className={({ isActive }) =>
+              cn(
+                'flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 px-1 text-[10px] font-medium transition-colors [&_svg]:size-[18px] [&_svg]:shrink-0',
+                isActive ? 'text-sidebar-primary' : 'text-muted-foreground',
+              )
+            }
+          >
+            <item.icon />
+            <span className="max-w-full truncate">{item.label === 'Organizations' ? 'Orgs' : item.label}</span>
+          </NavLink>
+        ))}
+      </nav>
     </div>
   );
 }

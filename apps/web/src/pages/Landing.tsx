@@ -14,7 +14,7 @@ import { cn } from '@/lib/utils';
 export default function LandingPage() {
   return (
     <div className="flex min-h-svh flex-col">
-      <header className="mx-auto flex w-full max-w-3xl items-center justify-between px-6 pt-6">
+      <header className="mx-auto flex w-full max-w-3xl items-center justify-between px-6 pt-6 max-sm:px-4 max-sm:pt-4">
         <div className="flex items-center gap-2.5 font-heading text-[17px] font-bold tracking-tight">
           <LogoMark size={24} />
           Echo
@@ -29,7 +29,7 @@ export default function LandingPage() {
         </nav>
       </header>
 
-      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center gap-12 px-6 py-16">
+      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center gap-12 px-6 py-16 max-sm:gap-10 max-sm:px-4 max-sm:py-10">
         <div className="flex flex-col items-start gap-4">
           <h1 className="max-w-xl text-balance font-heading text-3xl font-semibold tracking-tight sm:text-4xl">
             Give your AI tools a shared memory.
@@ -38,7 +38,7 @@ export default function LandingPage() {
             Echo is a self-hosted memory layer for AI apps. Claude, Cursor, and any MCP-compatible tool can save what
             they learn and recall it later — scoped to you, your team, or your whole organization.
           </p>
-          <div className="mt-1 flex items-center gap-2">
+          <div className="mt-1 flex w-full items-center gap-2 max-sm:[&>a]:flex-1">
             <Link to="/signup" className={cn(buttonVariants({ size: 'lg' }))}>
               Get started
               <ArrowRightIcon data-icon="inline-end" />
@@ -80,7 +80,7 @@ export default function LandingPage() {
         </div>
       </main>
 
-      <footer className="mx-auto w-full max-w-3xl px-6 pb-8">
+      <footer className="mx-auto w-full max-w-3xl px-6 pb-8 max-sm:px-4 max-sm:pb-5">
         <span className="font-mono text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
           Echo — self-hosted memory for AI tools
         </span>

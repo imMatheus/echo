@@ -80,7 +80,7 @@ function Step({
   children?: ReactNode;
 }) {
   return (
-    <li className="group relative flex gap-4">
+    <li className="group relative flex gap-4 max-sm:gap-3">
       <div className="flex flex-col items-center">
         <div className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted font-heading text-[11px] font-semibold">
           {number}
@@ -241,7 +241,7 @@ export default function ConnectPage() {
           }
         >
           <Tabs value={client} onValueChange={(value) => setClient(value as string)}>
-            <TabsList className="max-w-full justify-start overflow-x-auto">
+            <TabsList className="max-w-full justify-start overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               <TabsTrigger value="claude-code">Claude Code</TabsTrigger>
               <TabsTrigger value="claude-desktop">Claude Desktop</TabsTrigger>
               <TabsTrigger value="cursor">Cursor</TabsTrigger>
@@ -407,7 +407,7 @@ export default function ConnectPage() {
       </section>
 
       <section className="mt-10 border-t pt-6">
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex items-start justify-between gap-4 max-sm:flex-col">
           <div>
             <h2 className="font-heading text-sm font-medium">Your API keys</h2>
             <p className="mt-0.5 max-w-prose text-xs/relaxed text-muted-foreground">
@@ -415,7 +415,7 @@ export default function ConnectPage() {
               lose access immediately.
             </p>
           </div>
-          <Button size="sm" className="shrink-0" onClick={() => setShowCreate(true)}>
+          <Button size="sm" className="shrink-0 max-sm:w-full" onClick={() => setShowCreate(true)}>
             <PlusIcon data-icon="inline-start" />
             Create key
           </Button>
@@ -439,58 +439,107 @@ export default function ConnectPage() {
               }
             />
           ) : (
-            <div className="overflow-x-auto rounded-xl border bg-card shadow-card">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Source app</TableHead>
-                    <TableHead>Key</TableHead>
-                    <TableHead>Created</TableHead>
-                    <TableHead>Last used</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {keys.map((key) => {
-                    const revoked = key.revokedAt !== null;
-                    return (
-                      <TableRow key={key.id} className={cn(revoked && 'opacity-60')}>
-                        <TableCell className="font-semibold">{key.name}</TableCell>
-                        <TableCell>
-                          <SourceChip app={key.sourceApp} />
-                        </TableCell>
-                        <TableCell>
-                          <span className="font-mono text-xs text-muted-foreground">{key.keyPrefix}</span>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          <RelativeTime date={key.createdAt} />
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {key.lastUsedAt ? <RelativeTime date={key.lastUsedAt} /> : 'Never'}
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={revoked ? 'secondary' : 'outline'}
-                            className={cn(!revoked && 'border-success/35 bg-success/10 text-success')}
-                          >
-                            {revoked ? 'revoked' : 'active'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {!revoked && (
-                            <Button variant="destructive" size="sm" onClick={() => setRevokeTarget(key)}>
-                              Revoke
-                            </Button>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
+            <>
+              <ul className="grid gap-2 sm:hidden">
+                {keys.map((key) => {
+                  const revoked = key.revokedAt !== null;
+                  return (
+                    <li
+                      key={key.id}
+                      className={cn('rounded-xl border bg-card p-4 shadow-card', revoked && 'opacity-60')}
+                    >
+                      <div className="flex min-w-0 items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-semibold">{key.name}</div>
+                          <div className="mt-1 font-mono text-xs text-muted-foreground">{key.keyPrefix}</div>
+                        </div>
+                        <Badge
+                          variant={revoked ? 'secondary' : 'outline'}
+                          className={cn('shrink-0', !revoked && 'border-success/35 bg-success/10 text-success')}
+                        >
+                          {revoked ? 'revoked' : 'active'}
+                        </Badge>
+                      </div>
+                      <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
+                        <div>
+                          <dt className="text-muted-foreground">Source app</dt>
+                          <dd className="mt-1">
+                            <SourceChip app={key.sourceApp} />
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-muted-foreground">Created</dt>
+                          <dd className="mt-1">
+                            <RelativeTime date={key.createdAt} />
+                          </dd>
+                        </div>
+                        <div className="col-span-2">
+                          <dt className="text-muted-foreground">Last used</dt>
+                          <dd className="mt-1">{key.lastUsedAt ? <RelativeTime date={key.lastUsedAt} /> : 'Never'}</dd>
+                        </div>
+                      </dl>
+                      {!revoked && (
+                        <Button variant="destructive" className="mt-4 w-full" onClick={() => setRevokeTarget(key)}>
+                          Revoke key
+                        </Button>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+              <div className="overflow-x-auto rounded-xl border bg-card shadow-card max-sm:hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Source app</TableHead>
+                      <TableHead>Key</TableHead>
+                      <TableHead>Created</TableHead>
+                      <TableHead>Last used</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {keys.map((key) => {
+                      const revoked = key.revokedAt !== null;
+                      return (
+                        <TableRow key={key.id} className={cn(revoked && 'opacity-60')}>
+                          <TableCell className="font-semibold">{key.name}</TableCell>
+                          <TableCell>
+                            <SourceChip app={key.sourceApp} />
+                          </TableCell>
+                          <TableCell>
+                            <span className="font-mono text-xs text-muted-foreground">{key.keyPrefix}</span>
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">
+                            <RelativeTime date={key.createdAt} />
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {key.lastUsedAt ? <RelativeTime date={key.lastUsedAt} /> : 'Never'}
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={revoked ? 'secondary' : 'outline'}
+                              className={cn(!revoked && 'border-success/35 bg-success/10 text-success')}
+                            >
+                              {revoked ? 'revoked' : 'active'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {!revoked && (
+                              <Button variant="destructive" size="sm" onClick={() => setRevokeTarget(key)}>
+                                Revoke
+                              </Button>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
           )}
         </div>
       </section>

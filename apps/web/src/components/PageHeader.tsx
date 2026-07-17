@@ -15,7 +15,7 @@ export function PageHeader({
   backLink?: ReactNode;
 }) {
   return (
-    <div className="mb-6 flex items-start gap-3 max-sm:flex-col">
+    <div className="mb-6 flex items-start gap-3 max-sm:flex-col max-sm:gap-4">
       <div className="min-w-0">
         {backLink && <div className="mb-1.5">{backLink}</div>}
         <div className="flex min-w-0 flex-wrap items-center gap-2.5">
@@ -27,7 +27,7 @@ export function PageHeader({
         {subtitle && <p className="mt-1 text-xs/relaxed text-muted-foreground">{subtitle}</p>}
       </div>
       {actions && (
-        <div className="ml-auto flex shrink-0 items-center gap-2 pt-0.5 max-sm:ml-0 max-sm:max-w-full max-sm:flex-wrap">
+        <div className="ml-auto flex shrink-0 items-center gap-2 pt-0.5 max-sm:ml-0 max-sm:w-full max-sm:max-w-full max-sm:flex-wrap max-sm:[&>[data-slot=button]]:w-full max-sm:[&>[data-slot=tabs]]:w-full max-sm:[&>[data-slot=tabs]>[data-slot=tabs-list]]:w-full">
           {actions}
         </div>
       )}

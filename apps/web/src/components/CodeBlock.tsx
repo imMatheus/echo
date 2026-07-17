@@ -44,8 +44,15 @@ export function CodeBlock({ code }: { code: string }) {
 
   return (
     <div className="relative rounded-lg border bg-background dark:bg-input/10">
-      <pre className="overflow-x-auto whitespace-pre py-3 pl-3 pr-20 font-mono text-xs leading-relaxed">{code}</pre>
-      <Button variant="outline" size="sm" className="absolute right-2 top-2" onClick={() => void onCopy()}>
+      <pre className="overflow-x-auto whitespace-pre py-3 pl-3 pr-20 font-mono text-xs leading-relaxed max-sm:pb-14 max-sm:pr-3">
+        {code}
+      </pre>
+      <Button
+        variant="outline"
+        size="sm"
+        className="absolute right-2 top-2 max-sm:top-auto max-sm:bottom-2"
+        onClick={() => void onCopy()}
+      >
         {copied ? 'Copied!' : 'Copy'}
       </Button>
     </div>

@@ -100,8 +100,8 @@ export function AuditTable({
 
   return (
     <div>
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="max-w-full overflow-x-auto">
+      <div className="mb-4 flex flex-wrap items-center gap-2 max-sm:grid max-sm:grid-cols-1">
+        <div className="max-w-full overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <Tabs
             value={category}
             onValueChange={(value) => {
@@ -123,10 +123,10 @@ export function AuditTable({
             </TabsList>
           </Tabs>
         </div>
-        <div className="relative w-52 max-w-full">
+        <div className="relative w-52 max-w-full max-sm:w-full">
           <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
-            className="h-8 pl-8"
+            className="h-8 pl-8 max-sm:h-10"
             value={action}
             onChange={(e) => {
               setAction(e.target.value);
@@ -140,7 +140,7 @@ export function AuditTable({
           />
         </div>
         {data && (
-          <span className="ml-auto text-xs tabular-nums text-muted-foreground">
+          <span className="ml-auto text-xs tabular-nums text-muted-foreground max-sm:ml-0">
             {total} {total === 1 ? 'event' : 'events'}
           </span>
         )}
@@ -165,7 +165,7 @@ export function AuditTable({
           >
             {groups.map((group) => (
               <section key={group.label}>
-                <header className="flex items-baseline gap-2 border-b bg-muted/40 px-4 py-1.5">
+                <header className="flex items-baseline gap-2 border-b bg-muted/40 px-4 py-1.5 max-sm:px-3 max-sm:py-2">
                   <h3 className="text-xs font-medium">{group.label}</h3>
                   <span className="text-[11px] tabular-nums text-muted-foreground">
                     {group.entries.length} {group.entries.length === 1 ? 'event' : 'events'}
@@ -219,9 +219,9 @@ function AuditRow({
         type="button"
         onClick={onToggle}
         aria-expanded={isOpen}
-        className="flex w-full items-center gap-3 px-4 py-1.5 text-left transition-colors hover:bg-muted/40"
+        className="flex w-full items-center gap-3 px-4 py-1.5 text-left transition-colors hover:bg-muted/40 max-sm:items-start max-sm:px-3 max-sm:py-3"
       >
-        <span className="flex min-w-0 flex-1 items-baseline gap-2">
+        <span className="flex min-w-0 flex-1 items-baseline gap-2 max-sm:flex-col max-sm:items-start max-sm:gap-0.5">
           <span className="whitespace-nowrap text-[13px]/6 font-medium">{actionLabel(entry.action)}</span>
           {showActor && entry.actorName && (
             <span className="max-w-40 shrink-0 truncate text-[11px] text-muted-foreground">by {entry.actorName}</span>
@@ -238,7 +238,7 @@ function AuditRow({
         <time
           dateTime={entry.occurredAt}
           title={new Date(entry.occurredAt).toLocaleString()}
-          className="whitespace-nowrap text-[11px] tabular-nums text-muted-foreground"
+          className="whitespace-nowrap pt-1 text-[11px] tabular-nums text-muted-foreground sm:pt-0"
         >
           {clockTime(entry.occurredAt)}
         </time>
@@ -282,7 +282,7 @@ function AuditRowDetails({ entry }: { entry: AuditEntry }) {
   const details = Object.entries(entry.details);
 
   return (
-    <div className="space-y-3 border-t bg-muted/20 px-4 py-3">
+    <div className="space-y-3 border-t bg-muted/20 px-4 py-3 max-sm:px-3">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-muted-foreground">
         <Badge variant="outline" className="rounded-md font-mono">
           {entry.action}
@@ -293,7 +293,7 @@ function AuditRowDetails({ entry }: { entry: AuditEntry }) {
         <SourceChip app={entry.sourceApp} />
       </div>
       {(references.length > 0 || details.length > 0) && (
-        <dl className="grid grid-cols-[max-content_minmax(0,1fr)] items-center gap-x-4 gap-y-1 text-xs">
+        <dl className="grid grid-cols-[max-content_minmax(0,1fr)] items-center gap-x-4 gap-y-1 text-xs max-sm:grid-cols-1 max-sm:items-start max-sm:gap-y-0.5 max-sm:[&_dd]:mb-2">
           {references.map((ref) => (
             <Fragment key={ref.label}>
               <dt className="text-muted-foreground">{ref.label}</dt>

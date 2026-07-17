@@ -250,11 +250,11 @@ export function MemoryBrowser({
         />
       )}
 
-      <div className="mb-3 flex flex-wrap gap-2">
+      <div className="mb-3 flex flex-wrap gap-2 max-sm:grid max-sm:grid-cols-1">
         <div className="relative min-w-40 flex-[1_1_16rem]">
           <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
-            className="h-8 pl-8"
+            className="h-8 pl-8 max-sm:h-10"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             placeholder="Search memories semantically…"
@@ -287,9 +287,9 @@ export function MemoryBrowser({
           </Button>
         </div>
       ) : (
-        <div className="mb-4 flex flex-wrap gap-2">
+        <div className="mb-4 flex flex-wrap gap-2 max-sm:grid max-sm:grid-cols-2">
           <Select items={scopeItems} value={scopeId} onValueChange={(v) => onScopeChange(v as string)}>
-            <SelectTrigger className="w-48 max-w-full" aria-label="Filter by scope">
+            <SelectTrigger className="w-48 max-w-full max-sm:w-full" aria-label="Filter by scope">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -298,7 +298,7 @@ export function MemoryBrowser({
             </SelectContent>
           </Select>
           <Select items={KIND_ITEMS} value={kind} onValueChange={(v) => setFilter(setKind)(v as string)}>
-            <SelectTrigger className="w-32 max-w-full" aria-label="Filter by kind">
+            <SelectTrigger className="w-32 max-w-full max-sm:w-full" aria-label="Filter by kind">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -310,7 +310,7 @@ export function MemoryBrowser({
             </SelectContent>
           </Select>
           <Input
-            className="w-32 max-w-full"
+            className="w-32 max-w-full max-sm:w-full"
             value={sourceApp}
             onChange={(e) => setFilter(setSourceApp)(e.target.value)}
             placeholder="Source app"
@@ -318,7 +318,7 @@ export function MemoryBrowser({
             maxLength={64}
           />
           <Input
-            className="w-32 max-w-full"
+            className="w-32 max-w-full max-sm:w-full"
             value={tag}
             onChange={(e) => setFilter(setTag)(e.target.value)}
             placeholder="Tag"
@@ -326,7 +326,7 @@ export function MemoryBrowser({
             maxLength={64}
           />
           {hasFilters && (
-            <Button variant="ghost" size="sm" onClick={clearFilters}>
+            <Button variant="ghost" size="sm" className="max-sm:col-span-2" onClick={clearFilters}>
               Reset filters
             </Button>
           )}

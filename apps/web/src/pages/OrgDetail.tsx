@@ -67,7 +67,7 @@ export default function OrgDetailPage() {
       onValueChange={(value) => setSearchParams(value === 'memories' ? {} : { tab: value as string })}
       className="mb-5"
     >
-      <TabsList className="max-w-full justify-start overflow-x-auto">
+      <TabsList className="max-w-full justify-start overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {TABS.map((t) => (
           <TabsTrigger key={t} value={t}>
             {t.charAt(0).toUpperCase() + t.slice(1)}
@@ -284,7 +284,63 @@ function MembersTab({ orgId, canManage }: { orgId: string; canManage: boolean })
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-xl border bg-card shadow-card dark:shadow-none">
+      <ul className="grid gap-2 sm:hidden">
+        {members.map((member) => {
+          const isSelf = member.userId === user?.id;
+          return (
+            <li key={member.userId} className="rounded-xl border bg-card p-4 shadow-card dark:shadow-none">
+              <div className="min-w-0">
+                <div className="truncate text-sm font-semibold">{member.name}</div>
+                <div className="mt-1 break-all text-xs text-muted-foreground">{member.email}</div>
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
+                <div>
+                  <div className="mb-1 text-muted-foreground">Role</div>
+                  {canManage ? (
+                    <Select
+                      items={ROLE_ITEMS}
+                      value={member.role}
+                      onValueChange={(v) => void changeRole(member, v as OrgRole)}
+                      disabled={changingRoleId !== null}
+                    >
+                      <SelectTrigger className="w-full" aria-label={`Role for ${member.name}`}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ROLE_ITEMS.map((item) => (
+                          <SelectItem key={item.value} value={item.value}>
+                            {item.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <RoleBadge role={member.role} />
+                  )}
+                </div>
+                <div>
+                  <div className="mb-1 text-muted-foreground">Joined</div>
+                  <div className="flex h-10 items-center">
+                    <RelativeTime date={member.joinedAt} />
+                  </div>
+                </div>
+              </div>
+              {(isSelf || canManage) && (
+                <Button
+                  variant="destructive"
+                  className="mt-4 w-full"
+                  onClick={() => setRemoveTarget(member)}
+                  disabled={changingRoleId !== null}
+                >
+                  {isSelf ? 'Leave organization' : 'Remove member'}
+                </Button>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+
+      <div className="overflow-x-auto rounded-xl border bg-card shadow-card max-sm:hidden dark:shadow-none">
         <Table>
           <TableHeader>
             <TableRow>
@@ -548,13 +604,13 @@ function ScopesTab({
           {subScopes.map((scope) => (
             <Card key={scope.id} size="sm">
               <CardContent>
-                <div className="flex flex-wrap items-center gap-2.5">
+                <div className="flex flex-wrap items-center gap-2.5 max-sm:items-start">
                   <ScopeBadge type={scope.type} />
                   <strong className="text-xs font-semibold">{scope.name}</strong>
                   <span className="text-xs text-muted-foreground">
                     {scope.memoryCount} memor{scope.memoryCount === 1 ? 'y' : 'ies'}
                   </span>
-                  <span className="flex-1" />
+                  <span className="flex-1 max-sm:basis-full" />
                   {isOwner && (
                     <>
                       <Button
@@ -678,9 +734,12 @@ function ScopeMembers({ scopeId }: { scopeId: string }) {
           ))}
         </>
       )}
-      <form className="mt-2.5 flex flex-wrap items-center gap-2" onSubmit={(e) => void add(e)}>
+      <form
+        className="mt-2.5 flex flex-wrap items-center gap-2 max-sm:grid max-sm:grid-cols-[minmax(0,1fr)_auto]"
+        onSubmit={(e) => void add(e)}
+      >
         <Input
-          className="max-w-70"
+          className="max-w-70 max-sm:max-w-none"
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
