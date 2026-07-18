@@ -18,12 +18,17 @@ function fail(message: string): ToolResult {
   return { content: [{ type: 'text', text: `Error: ${message}` }], isError: true };
 }
 
-async function run(fn: () => Promise<ToolResult>): Promise<ToolResult> {
+export async function runTool(app: AppContext, fn: () => Promise<ToolResult>): Promise<ToolResult> {
   try {
     return await fn();
   } catch (err) {
     if (err instanceof HttpError) return fail(err.message);
-    throw err;
+    // Mirror the REST error handler: an unexpected error must be logged
+    // server-side and surfaced as a generic message. Rethrowing instead lets
+    // the MCP SDK swallow it into a tool error carrying the raw internal
+    // message, so operators lose the error and clients see internal detail.
+    app.log.error({ err }, 'mcp tool failed');
+    return fail('Internal error');
   }
 }
 
@@ -101,7 +106,7 @@ export function buildMcpServer(app: AppContext, ctx: AuthContext): McpServer {
         .describe('Auto-expire after N days, for facts that go stale (e.g. "currently traveling").'),
     },
     async (args) =>
-      run(async () => {
+      runTool(app, async () => {
         const { scope, error } = await resolveScopeSelector(app, ctx.userId, args.scope);
         if (!scope) return fail(error ?? 'No personal scope found');
         const memory = await createMemory(app, ctx, {
@@ -130,7 +135,7 @@ export function buildMcpServer(app: AppContext, ctx: AuthContext): McpServer {
       limit: z.number().int().min(1).max(50).optional().describe('Max results, default 8.'),
     },
     async (args) =>
-      run(async () => {
+      runTool(app, async () => {
         let scopeIds: string[] | undefined;
         if (args.scope) {
           const { scope, error } = await resolveScopeSelector(app, ctx.userId, args.scope);
@@ -155,7 +160,7 @@ export function buildMcpServer(app: AppContext, ctx: AuthContext): McpServer {
       offset: z.number().int().min(0).max(100_000).optional(),
     },
     async (args) =>
-      run(async () => {
+      runTool(app, async () => {
         let scopeId: string | undefined;
         if (args.scope) {
           const { scope, error } = await resolveScopeSelector(app, ctx.userId, args.scope);
@@ -178,7 +183,7 @@ export function buildMcpServer(app: AppContext, ctx: AuthContext): McpServer {
       memory_id: z.string().uuid().describe('The id of the memory to delete.'),
     },
     async (args) =>
-      run(async () => {
+      runTool(app, async () => {
         await deleteMemory(app, ctx, args.memory_id);
         return ok({ deleted: true, memory_id: args.memory_id });
       }),
@@ -189,7 +194,7 @@ export function buildMcpServer(app: AppContext, ctx: AuthContext): McpServer {
     'List every Echo scope the user can access, including personal, organization, workspace, team, and project scopes, with opaque ids and memory counts. Call this when the user asks about available scopes or when remember_context needs a shared destination whose exact name or id is unknown or ambiguous. It is usually unnecessary for personal-memory writes or searches across all accessible scopes; copy returned scope ids exactly and never guess them.',
     {},
     async () =>
-      run(async () => {
+      runTool(app, async () => {
         const scopes = await getAccessibleScopes(app, ctx.userId);
         return ok({
           scopes: scopes.map((s) => ({
