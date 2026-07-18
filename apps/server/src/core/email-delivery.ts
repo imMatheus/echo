@@ -129,6 +129,14 @@ export async function processEmailOutbox(app: AppContext, limit = 10): Promise<n
   return claimed.length;
 }
 
+/**
+ * Fire-and-forget outbox flush after enqueuing an auth email, so the link is
+ * delivered without blocking the request. Failures are logged, never surfaced.
+ */
+export function kickEmailOutbox(app: AppContext, limit = 5): void {
+  void processEmailOutbox(app, limit).catch((err) => app.log.error({ err }, 'email outbox kick failed'));
+}
+
 export async function sweepAuthEmailData(app: AppContext): Promise<void> {
   const outboxCutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const tokenCutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);

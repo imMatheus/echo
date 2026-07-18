@@ -4,18 +4,16 @@ import { z } from 'zod';
 import { getAccessibleScopes, getScopeAccess, toScopeWithAccess } from '@/core/access';
 import { addScopeMember, createOrgScope, deleteOrgScope, listScopeMembers, removeScopeMember } from '@/core/orgs';
 import { notFound } from '@/lib/http-error';
+import { displayName, emailAddress, idParam, memberParam, uuid } from '@/lib/schemas';
 import { parse } from '@/lib/validate';
 import type { AppContext } from '@/types';
 import { requireAuth } from '@/http/authn';
 
 const createSchema = z.object({
-  orgId: z.string().uuid(),
+  orgId: uuid,
   type: z.enum(ORG_SCOPE_TYPES),
-  name: z.string().trim().min(1).max(100),
+  name: displayName,
 });
-
-const idParam = z.object({ id: z.string().uuid() });
-const memberParam = z.object({ id: z.string().uuid(), userId: z.string().uuid() });
 
 export function scopeRoutes(app: AppContext) {
   return async function routes(f: FastifyInstance) {
@@ -52,7 +50,7 @@ export function scopeRoutes(app: AppContext) {
     f.post('/scopes/:id/members', async (req, reply) => {
       const ctx = await requireAuth(app, req);
       const { id } = parse(idParam, req.params);
-      const { email } = parse(z.object({ email: z.string().trim().email().max(254) }), req.body);
+      const { email } = parse(z.object({ email: emailAddress }), req.body);
       const member = await addScopeMember(app, ctx, id, email);
       reply.code(201);
       return { member };

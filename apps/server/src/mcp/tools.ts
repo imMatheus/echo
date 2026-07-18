@@ -5,6 +5,7 @@ import { getAccessibleScopes, resolveScopeSelector } from '@/core/access';
 import { createMemory, deleteMemory, listMemories, searchMemories } from '@/core/memories';
 import { VERSION } from '@/config';
 import { HttpError } from '@/lib/http-error';
+import { shortLabel, uuid } from '@/lib/schemas';
 import type { AppContext, AuthContext } from '@/types';
 
 type ToolResult = { content: Array<{ type: 'text'; text: string }>; isError?: boolean };
@@ -88,7 +89,7 @@ export function buildMcpServer(app: AppContext, ctx: AuthContext): McpServer {
         .optional()
         .describe('Mark "high" for health, financial, or otherwise delicate information.'),
       tags: z
-        .array(z.string().trim().min(1).max(64))
+        .array(shortLabel)
         .max(20)
         .optional()
         .describe('Short topical tags, normalized to lowercase (e.g. ["preferences", "tooling"]).'),
@@ -175,7 +176,7 @@ export function buildMcpServer(app: AppContext, ctx: AuthContext): McpServer {
     'forget_context',
     'Permanently delete one Echo memory by its exact id. Call this only when the user explicitly asks Echo to forget or delete a stored fact, including when they say a memory is wrong or obsolete; first use recall_context or list_context to identify the exact memory and disambiguate if multiple entries could match. Never delete additional related memories by inference, and do not use this tool merely because a recalled memory seems irrelevant to the current task.',
     {
-      memory_id: z.string().uuid().describe('The id of the memory to delete.'),
+      memory_id: uuid.describe('The id of the memory to delete.'),
     },
     async (args) =>
       run(async () => {

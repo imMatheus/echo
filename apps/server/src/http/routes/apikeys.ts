@@ -1,13 +1,14 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { createApiKey, listApiKeys, revokeApiKey } from '@/core/apikeys';
+import { displayName, idParam, shortLabel } from '@/lib/schemas';
 import { parse } from '@/lib/validate';
 import type { AppContext } from '@/types';
 import { requireSessionAuth } from '@/http/authn';
 
 const createSchema = z.object({
-  name: z.string().trim().min(1).max(100),
-  sourceApp: z.string().trim().min(1).max(64).optional(),
+  name: displayName,
+  sourceApp: shortLabel.optional(),
 });
 
 export function apiKeyRoutes(app: AppContext) {
@@ -26,7 +27,7 @@ export function apiKeyRoutes(app: AppContext) {
 
     f.delete('/api-keys/:id', async (req) => {
       const ctx = await requireSessionAuth(app, req);
-      const { id } = parse(z.object({ id: z.string().uuid() }), req.params);
+      const { id } = parse(idParam, req.params);
       await revokeApiKey(app, ctx, id);
       return { ok: true };
     });
