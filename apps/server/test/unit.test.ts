@@ -170,7 +170,7 @@ describe('configuration', () => {
     const productionSecret = 'production-test-token-secret-with-at-least-thirty-two-characters';
     expect(() => loadConfig({ EMAIL_FROM: 'Echo <mail.example.com>' })).toThrow('Invalid environment configuration');
     expect(() => loadConfig({ EMAIL_REPLY_TO: 'support.example.com' })).toThrow('Invalid environment configuration');
-    expect(() => loadConfig({ EMAIL_PROVIDER: 'resend', RESEND_API_KEY: 're_test' })).toThrow('requires APP_URL');
+    expect(() => loadConfig({ EMAIL_PROVIDER: 'resend' })).toThrow('requires RESEND_API_KEY');
     expect(() =>
       loadConfig({
         APP_URL: 'http://localhost:5173',
@@ -206,7 +206,7 @@ describe('configuration', () => {
       STATIC_DIR: '',
       VOYAGE_API_KEY: '',
     });
-    expect(config.APP_URL).toBeUndefined();
+    expect(config.APP_URL).toBe('http://localhost:5173');
     expect(config.OPENAI_BASE_URL).toBe('https://api.openai.com/v1');
     expect(config.OLLAMA_URL).toBe('http://localhost:11434');
   });
@@ -247,17 +247,16 @@ describe('database URL normalization', () => {
   });
 
   it('configures the local Vite origin and rejects insecure cross-site cookies', () => {
-    expect(loadConfig({}).WEB_ORIGIN).toBe('http://localhost:5173');
+    expect(loadConfig({}).APP_URL).toBe('http://localhost:5173');
     expect(() => loadConfig({ COOKIE_SAME_SITE: 'none' })).toThrow('requires an HTTPS APP_URL');
     expect(
       loadConfig({
-        APP_URL: 'https://app.example.com',
-        WEB_ORIGIN: 'https://app.example.com/',
+        APP_URL: 'https://app.example.com/',
         COOKIE_SAME_SITE: 'none',
         EMAIL_PROVIDER: 'resend',
         RESEND_API_KEY: 're_test',
         AUTH_TOKEN_SECRET: 'production-test-token-secret-with-at-least-thirty-two-characters',
-      }).WEB_ORIGIN,
+      }).APP_URL,
     ).toBe('https://app.example.com');
   });
 });
@@ -265,7 +264,12 @@ describe('database URL normalization', () => {
 describe('cross-origin dashboard access', () => {
   it('allows only the configured browser origin and supports credentialed preflight', async () => {
     const app = await buildApp({
-      config: loadConfig({ WEB_ORIGIN: 'https://app.example.com' }),
+      config: loadConfig({
+        APP_URL: 'https://app.example.com',
+        EMAIL_PROVIDER: 'resend',
+        RESEND_API_KEY: 're_test',
+        AUTH_TOKEN_SECRET: 'production-test-token-secret-with-at-least-thirty-two-characters',
+      }),
       db: {} as AppContext['db'],
       embeddings: null,
       email: new ConsoleEmailProvider(),
